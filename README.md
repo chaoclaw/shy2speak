@@ -30,7 +30,7 @@ openssl rand -hex 32
 
 ## 绿联 NAS Docker 部署
 
-`compose.ugreen.yml` 是 image-only 配置，适合在绿联 Docker「项目 / Compose」界面粘贴。镜像工作流会发布 x86_64 与 ARM64 两种架构到：
+`compose.ugreen.yml` 是不依赖 `.env` 的单文件直配模板，适合在绿联 Docker「项目 / Compose」界面粘贴。镜像工作流会发布 x86_64 与 ARM64 两种架构到：
 
 ```text
 ghcr.io/chaoclaw/shy2speak:edge
@@ -38,10 +38,12 @@ ghcr.io/chaoclaw/shy2speak:edge
 
 部署步骤：
 
-1. 在绿联 Docker 中新建 Compose 项目，粘贴 `compose.ugreen.yml`。
-2. 在项目环境变量中填写 `POSTGRES_PASSWORD`、至少 32 位的 `AUTH_SECRET`，以及端口 `SHY2SPEAK_PORT`（默认 `8080`）。
+1. 打开 `compose.ugreen.yml`，分别将文件顶部的 `CHANGE_ME_DATABASE_PASSWORD` 和 `CHANGE_ME_WITH_RANDOM_AUTH_SECRET_AT_LEAST_32_CHARS` 替换为两组不同的随机值；可分别执行一次 `openssl rand -hex 32` 生成。
+2. 在绿联 Docker 中新建 Compose 项目，粘贴修改后的完整文件；不需要再配置项目环境变量。端口默认是 `8080`，如有冲突只修改 `ports` 中冒号左侧的数字。
 3. 启动项目，等待 `database` 变为 healthy、`app` 变为 running。
 4. 打开 `http://NAS局域网IP:8080`；Docker 页面部署会自动使用同源 API，无需再填写数据库地址或浏览器密钥。
+
+请勿把已经填写真实密码和密钥的副本提交到 Git；仓库只保存占位符模板。
 
 浏览器麦克风与完整 PWA 安装要求安全上下文。局域网首次检查可使用 HTTP；正式使用录音时，请在绿联反向代理中为该容器配置 HTTPS 域名和证书。
 

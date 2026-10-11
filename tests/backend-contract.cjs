@@ -25,6 +25,9 @@ assert.match(server, /timingSafeEqual/, 'credential comparisons must be timing s
 assert.match(server, /token_hash/, 'refresh tokens must be stored as hashes');
 assert.match(compose, /postgres:17-alpine/, 'UGREEN compose must include PostgreSQL');
 assert.match(compose, /ghcr\.io\/chaoclaw\/shy2speak:edge/, 'UGREEN compose must use the published image');
+assert.doesNotMatch(compose, /\$\{/, 'UGREEN compose must not require external environment interpolation');
+assert.match(compose, /&postgres-password/, 'UGREEN compose must define its database password in one place');
+assert.match(compose, /&auth-secret/, 'UGREEN compose must define its auth secret in one place');
 assert.match(dockerfile, /USER node/, 'application image must run as a non-root user');
 assert.match(workflow, /linux\/amd64,linux\/arm64/, 'image workflow must publish both common NAS architectures');
 assert.doesNotMatch(browserAdapter, /supabase/i, 'browser backend must not depend on Supabase');

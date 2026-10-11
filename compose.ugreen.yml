@@ -1,15 +1,20 @@
+# 单文件直配模板：部署前必须分别替换下面两个值。
+# 可运行两次 `openssl rand -hex 32` 生成数据库密码和认证密钥。
+x-postgres-password: &postgres-password "CHANGE_ME_DATABASE_PASSWORD"
+x-auth-secret: &auth-secret "CHANGE_ME_WITH_RANDOM_AUTH_SECRET_AT_LEAST_32_CHARS"
+
 services:
   database:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-shy2speak}
-      POSTGRES_USER: ${POSTGRES_USER:-shy2speak}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: shy2speak
+      POSTGRES_USER: shy2speak
+      POSTGRES_PASSWORD: *postgres-password
     volumes:
       - shy2speak-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD", "pg_isready", "-U", "shy2speak", "-d", "shy2speak"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -21,26 +26,28 @@ services:
       database:
         condition: service_healthy
     environment:
-      PORT: 8080
+      NODE_ENV: production
+      PORT: "8080"
       PGHOST: database
-      PGPORT: 5432
-      PGDATABASE: ${POSTGRES_DB:-shy2speak}
-      PGUSER: ${POSTGRES_USER:-shy2speak}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      AUTH_SECRET: ${AUTH_SECRET:?请设置至少 32 位的 AUTH_SECRET}
-      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-}
-      SMS_WEBHOOK_URL: ${SMS_WEBHOOK_URL:-}
-      SMS_WEBHOOK_TOKEN: ${SMS_WEBHOOK_TOKEN:-}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      PGPORT: "5432"
+      PGDATABASE: shy2speak
+      PGUSER: shy2speak
+      PGPASSWORD: *postgres-password
+      AUTH_SECRET: *auth-secret
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_DAYS: "30"
+      TRUST_PROXY: "false"
+      ALLOWED_ORIGINS: ""
+      SMTP_HOST: ""
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ""
+      SMS_WEBHOOK_URL: ""
+      SMS_WEBHOOK_TOKEN: ""
     ports:
-      - "${SHY2SPEAK_PORT:-8080}:8080"
+      - "8080:8080"
 
 volumes:
   shy2speak-postgres:
