@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -229,7 +230,11 @@ def main() -> int:
         sync_catalog(Path(args.catalog))
         return 0
     except Exception as error:
-        print(f"caption sync failed: {error}", file=sys.stderr)
+        message = re.sub(r"[\r\n]+", " ", str(error)).strip()
+        print(f"caption sync failed ({type(error).__name__}): {message}", file=sys.stderr)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            annotation = message.replace("%", "%25").replace(":", "%3A").replace(",", "%2C")
+            print(f"::error title=YouTube caption sync failed::{type(error).__name__}: {annotation}", file=sys.stderr)
         return 1
 
 
