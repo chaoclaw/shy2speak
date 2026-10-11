@@ -1,0 +1,20 @@
+{
+  "name": "Shy2Speak",
+  "short_name": "Shy2Speak",
+  "description": "用真实内容练习英语口语",
+  "start_url": "./#/overview",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#6658e8",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "继续学习", "url": "./#/practice" },
+    { "name": "今日复习", "url": "./#/vocabulary" },
+    { "name": "磨耳朵", "url": "./#/listening" },
+    { "name": "离线内容", "url": "./#/downloads" }
+  ]
+}

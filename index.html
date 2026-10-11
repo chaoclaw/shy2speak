@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh-CN" data-mode="light" data-theme="violet">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#6658e8" />
+    <meta name="description" content="Shy2Speak — 用真实内容练习英语口语" />
+    <title>Shy2Speak · 产品原型</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=2" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <button class="brand" data-view-link="overview" aria-label="Shy2Speak 首页">
+          <span class="brand-mark">S</span>
+          <span class="brand-copy"><strong>Shy2Speak</strong><small>Speak a little. Grow a lot.</small></span>
+        </button>
+
+        <nav class="side-nav">
+          <button class="nav-item active" data-view-link="overview"><span>⌂</span><b data-i18n="navOverview">学习概览</b></button>
+          <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
+          <button class="nav-item" data-view-link="vocabulary"><span>◇</span><b data-i18n="navVocabulary">生词本</b><em>12</em></button>
+          <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
+          <button class="nav-item" data-view-link="downloads"><span>⇩</span><b data-i18n="navDownloads">离线内容</b><em>3</em></button>
+          <button class="nav-item" data-view-link="studio"><span>✦</span><b data-i18n="navStudio">内容工作台</b></button>
+          <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <button class="nav-item" data-view-link="settings"><span>⚙</span><b data-i18n="navSettings">设置</b></button>
+          <div class="mini-profile">
+            <button class="avatar avatar-a" data-view-link="settings">LS</button>
+            <div><strong>LinSpeak</strong><small>Level 8 · 2,840 XP</small></div>
+            <button class="icon-btn" data-view-link="settings" aria-label="更多设置">•••</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <button class="mobile-menu icon-btn" id="mobileMenu" aria-label="打开菜单">☰</button>
+          <div class="top-context">
+            <span class="eyebrow" id="pageEyebrow">YOUR LEARNING SPACE</span>
+            <strong id="pageTitle">学习概览</strong>
+          </div>
+          <div class="top-actions">
+            <button class="compact-control" id="languageToggle" aria-label="切换界面语言">中 / EN</button>
+            <button class="compact-control" id="modeToggle" aria-label="切换日间夜间模式"><span id="modeIcon">☼</span><span class="control-label">日间</span></button>
+            <button class="icon-btn share-page" aria-label="分享当前页面">↗</button>
+            <button class="icon-btn notification-btn" aria-label="通知">♢<i></i></button>
+            <button class="avatar avatar-a top-avatar" data-view-link="settings">LS</button>
+          </div>
+        </header>
+
+        <div class="view-container">
+          <!-- Overview -->
+          <section class="view active" id="view-overview" data-title-zh="学习概览" data-title-en="Learning overview">
+            <div class="hero-grid">
+              <article class="welcome-card card">
+                <div class="welcome-copy">
+                  <span class="pill success">● 12 天连续学习</span>
+                  <h1>晚上好，Lin 👋<br /><span>今天再开口 6 分钟</span>，就完成目标。</h1>
+                  <p>你本周的发音平均分提高了 5 分。保持这个节奏，很快就能更自信地开口。</p>
+                  <div class="button-row">
+                    <button class="primary-btn" data-view-link="practice">继续 Chapter 03 <span>→</span></button>
+                    <button class="secondary-btn" data-view-link="listening">开始磨耳朵</button>
+                  </div>
+                </div>
+                <div class="goal-ring" style="--progress: 78">
+                  <div><strong>24</strong><span>/ 30 分钟</span><small>今日目标</small></div>
+                </div>
+              </article>
+
+              <article class="focus-card card">
+                <div class="card-heading"><div><span class="eyebrow">TODAY</span><h3>今日复习</h3></div><span class="count-badge">12</span></div>
+                <div class="focus-word"><span>/ˈkɒnfɪdəns/</span><strong>confidence</strong><small>信心；自信</small></div>
+                <div class="mini-progress"><span style="width: 68%"></span></div>
+                <button class="primary-btn full" data-view-link="vocabulary">开始 5 分钟复习</button>
+              </article>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card card"><span class="metric-icon violet">↗</span><div><small>本周学习</small><strong>142 <i>分钟</i></strong><em class="up">↑ 18%</em></div></article>
+              <article class="metric-card card"><span class="metric-icon mint">◎</span><div><small>发音平均分</small><strong>84 <i>分</i></strong><em class="up">↑ 5 分</em></div></article>
+              <article class="metric-card card"><span class="metric-icon amber">◇</span><div><small>已掌握生词</small><strong>268 <i>个</i></strong><em class="up">+ 16 本周</em></div></article>
+              <article class="metric-card card"><span class="metric-icon blue">♪</span><div><small>磨耳朵</small><strong>3.2 <i>小时</i></strong><em>目标 4 小时</em></div></article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="card chart-card">
+                <div class="card-heading"><div><span class="eyebrow">ACTIVITY</span><h3>本周学习节奏</h3></div><div class="segmented mini"><button class="active">7天</button><button>30天</button></div></div>
+                <div class="bar-chart" aria-label="本周学习时长柱状图">
+                  <div><span style="height:42%"></span><small>一</small></div><div><span style="height:65%"></span><small>二</small></div><div><span style="height:48%"></span><small>三</small></div><div><span style="height:86%"></span><small>四</small></div><div><span style="height:58%"></span><small>五</small></div><div><span style="height:100%"></span><small>六</small></div><div class="today"><span style="height:72%"></span><small>日</small></div>
+                </div>
+                <div class="chart-legend"><span><i class="legend-dot primary"></i>跟读 78 分钟</span><span><i class="legend-dot mint"></i>听力 46 分钟</span><span><i class="legend-dot amber"></i>复习 18 分钟</span></div>
+              </article>
+
+              <article class="card skill-card">
+                <div class="card-heading"><div><span class="eyebrow">SKILLS</span><h3>能力变化</h3></div><button class="text-btn">查看报告 →</button></div>
+                <div class="skill-row"><div><span>发音准确度</span><b>89</b></div><div class="skill-track"><i style="width:89%"></i></div></div>
+                <div class="skill-row"><div><span>流利度</span><b>82</b></div><div class="skill-track"><i style="width:82%"></i></div></div>
+                <div class="skill-row"><div><span>完整度</span><b>91</b></div><div class="skill-track"><i style="width:91%"></i></div></div>
+                <div class="skill-row"><div><span>词汇掌握</span><b>76</b></div><div class="skill-track"><i style="width:76%"></i></div></div>
+                <div class="insight"><span>✦</span><p>“th” 音比上周稳定了 <strong>12%</strong>，继续练习 <b>confidence</b> 中的重音。</p></div>
+              </article>
+            </div>
+
+            <div class="section-heading"><div><span class="eyebrow">CONTINUE</span><h2>继续学习</h2></div><button class="text-btn" data-view-link="practice">查看全部 →</button></div>
+            <div class="course-row">
+              <article class="course-card card" data-view-link="practice"><div class="course-cover cover-purple"><span>03</span><i>▶</i></div><div class="course-body"><span class="pill">DAILY ENGLISH</span><h3>How to Speak with Confidence</h3><p>Chapter 03 · Starting a Conversation</p><div class="course-progress"><span><i style="width:68%"></i></span><b>68%</b></div></div></article>
+              <article class="course-card card"><div class="course-cover cover-teal"><span>02</span><i>▶</i></div><div class="course-body"><span class="pill">WORKPLACE</span><h3>English for Better Meetings</h3><p>Chapter 02 · Sharing Your Opinion</p><div class="course-progress"><span><i style="width:42%"></i></span><b>42%</b></div></div></article>
+              <article class="achievement-card card"><div class="achievement-medal">◆</div><div><span class="eyebrow">NEW ACHIEVEMENT</span><h3>坚持不懈</h3><p>连续学习 12 天，超过了 86% 的学习者。</p></div></article>
+            </div>
+          </section>
+
+          <!-- Practice -->
+          <section class="view" id="view-practice" data-title-zh="视频学习" data-title-en="Video practice">
+            <div class="page-heading">
+              <div><span class="eyebrow">DAILY ENGLISH · TOPIC 01</span><h1>How to Speak with Confidence</h1><p>Chapter 03 · Starting a Conversation</p></div>
+              <div class="button-row"><button class="secondary-btn">☆ 收藏</button><button class="secondary-btn share-page">↗ 分享</button></div>
+            </div>
+
+            <div class="practice-layout">
+              <div class="practice-left">
+                <article class="video-card card">
+                  <div class="video-stage">
+                    <div class="teacher-visual"><div class="teacher-head"></div><div class="teacher-body"></div><div class="speech-card"><small>SMALL TALK</small><strong>Big<br />Connections</strong></div></div>
+                    <button class="big-play">▶</button>
+                    <span class="local-state hidden" id="localState">✓ 本地视频</span>
+                    <div class="video-controls"><button>▶</button><span>02:34 / 08:15</span><div class="media-progress"><i style="width:31%"></i></div><button>字幕</button><button>0.8×</button><button title="视频小窗">▣</button></div>
+                  </div>
+                </article>
+
+                <article class="card chapters-card">
+                  <div class="card-heading"><div><span class="eyebrow">CHAPTERS</span><h3>本章内容</h3></div><span class="muted">4 小节 · 约 28 分钟</span></div>
+                  <button class="chapter done"><i>✓</i><span><strong>Chapter 01</strong><small>Why Confidence Matters</small></span><em>08:12</em></button>
+                  <button class="chapter done"><i>✓</i><span><strong>Chapter 02</strong><small>Common Fears and How to Overcome Them</small></span><em>07:36</em></button>
+                  <button class="chapter active"><i>▶</i><span><strong>Chapter 03</strong><small>Starting a Conversation</small></span><em>06:58</em></button>
+                  <button class="chapter"><i>4</i><span><strong>Chapter 04</strong><small>Keep the Conversation Going</small></span><em>05:24</em></button>
+                </article>
+
+                <article class="card preview-card">
+                  <div><span class="metric-icon amber">◇</span><div><span class="eyebrow">PREVIEW</span><h3>课前预习词表</h3><p>15 个重点单词 · 8 个短语 · 预计 5 分钟</p></div></div>
+                  <button class="secondary-btn" data-view-link="vocabulary">开始预习 →</button>
+                </article>
+              </div>
+
+              <div class="practice-right">
+                <article class="lyrics-card card">
+                  <div class="lyrics-toolbar">
+                    <div class="segmented"><button class="active">逐句跟读</button><button>全文字幕</button><button>重点表达 <i>8</i></button></div>
+                    <div class="toolbar-actions"><button class="icon-btn" title="字幕语言">中/EN</button><button class="icon-btn">⋮</button></div>
+                  </div>
+                  <div class="lyrics-list" id="practiceLyrics">
+                    <button class="lyric-line"><em>1</em><span><strong>Hi, nice to meet you.</strong><small>你好，很高兴认识你。</small></span><i>▶</i></button>
+                    <button class="lyric-line"><em>2</em><span><strong>I'm a little nervous, but that's normal.</strong><small>我有点紧张，但这很正常。</small></span><i>▶</i></button>
+                    <button class="lyric-line active"><em>3</em><span><strong>The best way to build <mark data-word="confidence">confidence</mark> is to practice a little every day.</strong><small>建立自信最好的方法就是每天练习一点。</small></span><i>🔊</i></button>
+                    <button class="lyric-line"><em>4</em><span><strong>Start with simple questions like “How's your day?”</strong><small>从简单的问题开始，比如“你今天过得怎么样？”</small></span><i>▶</i></button>
+                    <button class="lyric-line"><em>5</em><span><strong>People usually appreciate a friendly and open tone.</strong><small>人们通常会欣赏友好和开放的态度。</small></span><i>▶</i></button>
+                  </div>
+
+                  <div class="record-panel">
+                    <button class="round-control">|‹</button>
+                    <div class="mic-stack">
+                      <button class="record-button" id="recordButton"><span>♩</span></button>
+                      <strong id="recordLabel">按住跟读</strong>
+                      <button class="mic-device" id="micDeviceButton">MacBook Pro 麦克风 · Mono Ch 1 <span>⌄</span></button>
+                    </div>
+                    <button class="round-control">↻</button>
+                  </div>
+                </article>
+
+                <article class="score-card card">
+                  <div class="card-heading"><div><span class="eyebrow">AI FEEDBACK</span><h3>本句跟读结果</h3></div><button class="text-btn">查看详情 →</button></div>
+                  <div class="word-scores"><span class="good">The</span><span class="good">best</span><span class="good">way</span><span class="good">to</span><span class="good">build</span><span class="warn">confidence</span><span class="good">is</span><span class="good">to</span><span class="good">practice</span><span class="good">every</span><span class="good">day</span></div>
+                  <div class="score-grid"><div class="total-score"><strong>86</strong><span>/100</span><small>综合得分</small></div><div><span>发音</span><strong>89</strong><i><b style="width:89%"></b></i></div><div><span>流利度</span><strong>82</strong><i><b style="width:82%"></b></i></div><div><span>完整度</span><strong>91</strong><i><b style="width:91%"></b></i></div></div>
+                </article>
+
+                <article class="card history-card">
+                  <div class="card-heading"><div><span class="eyebrow">HISTORY</span><h3>本节历史成绩</h3></div><span class="pill success">较上次 +7</span></div>
+                  <svg viewBox="0 0 520 110" role="img" aria-label="历史成绩折线图"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".24"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs><path d="M20 92 C100 85,120 74,180 68 S285 48,330 52 S430 26,500 18 L500 105 L20 105 Z" fill="url(#area)"/><path d="M20 92 C100 85,120 74,180 68 S285 48,330 52 S430 26,500 18" fill="none" stroke="var(--primary)" stroke-width="4" stroke-linecap="round"/><g fill="var(--surface)", stroke="var(--primary)" stroke-width="4"><circle cx="20" cy="92" r="5"/><circle cx="180" cy="68" r="5"/><circle cx="330" cy="52" r="5"/><circle cx="500" cy="18" r="5"/></g></svg>
+                  <div class="history-labels"><span>第一次 · 72</span><span>第二次 · 79</span><span>第三次 · 82</span><span>本次 · 86</span></div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- Vocabulary -->
+          <section class="view" id="view-vocabulary" data-title-zh="生词本" data-title-en="Vocabulary">
+            <div class="page-heading">
+              <div><span class="eyebrow">VOCABULARY LIBRARY</span><h1>我的生词本</h1><p>268 个词 · 今天待复习 12 个</p></div>
+              <div class="button-row"><button class="secondary-btn" id="cleanupOpen">待清理 <span class="count-inline">3</span></button><button class="primary-btn">开始复习 →</button></div>
+            </div>
+
+            <div class="cleanup-banner" id="cleanupBanner">
+              <div><span>♢</span><p><strong>有 3 个词已从默认生词本移除</strong><small>它们仍保存在其他生词本中，需要检查吗？最多再提醒 2 次。</small></p></div>
+              <div class="button-row"><button class="text-btn" id="dismissCleanup">不再提示</button><button class="secondary-btn" id="reviewCleanup">检查生词</button></div>
+            </div>
+
+            <div class="vocab-toolbar card">
+              <div class="search-box"><span>⌕</span><input id="vocabSearch" placeholder="搜索单词、翻译或标签" /></div>
+              <label>生词本<select id="wordbookSelect"><option>默认生词本</option><option>商务英语</option><option>本周复习</option></select></label>
+              <label>释义语言<select id="definitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label>
+              <button class="filter-btn">筛选 · 2</button>
+            </div>
+
+            <div class="vocab-layout">
+              <div class="word-list card" id="wordList">
+                <button class="word-list-item active" data-word-id="confidence"><div><strong>confidence</strong><span>/ˈkɑːnfɪdəns/</span><small data-definition="confidence">信心；自信</small></div><em>今日复习</em></button>
+                <button class="word-list-item" data-word-id="approach"><div><strong>approach</strong><span>/əˈproʊtʃ/</span><small data-definition="approach">方法；接近</small></div><em>学习中</em></button>
+                <button class="word-list-item" data-word-id="appreciate"><div><strong>appreciate</strong><span>/əˈpriːʃieɪt/</span><small data-definition="appreciate">欣赏；感激</small></div><em>困难</em></button>
+                <button class="word-list-item" data-word-id="conversation"><div><strong>conversation</strong><span>/ˌkɑːnvərˈseɪʃn/</span><small data-definition="conversation">交谈；对话</small></div><em>已掌握</em></button>
+                <button class="word-list-item" data-word-id="build-confidence"><div><strong>build confidence</strong><span>phrase</span><small data-definition="build-confidence">建立自信</small></div><em>新短语</em></button>
+              </div>
+
+              <article class="word-detail card">
+                <div class="word-detail-head"><div><span class="pill">NOUN · B1</span><h2 id="detailWord">confidence</h2><p><span>/ˈkɒnfɪdəns/ UK</span><button class="sound-btn">🔊</button><span>/ˈkɑːnfɪdəns/ US</span><button class="sound-btn">🔊</button></p></div><div class="button-row"><button class="icon-btn">↗</button><button class="primary-btn compact">已在默认生词本 ✓</button></div></div>
+                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition">信心；自信</strong><p id="definitionText">相信自己有能力完成某事的感觉或状态。</p><div class="example"><span>VIDEO EXAMPLE</span><p>The best way to build <mark>confidence</mark> is to practice a little every day.</p><small>建立自信最好的方法就是每天练习一点。</small><button>▶ 02:34</button></div></div></div>
+                <div class="definition-block"><span class="index">02</span><div><strong>信任；信赖</strong><p>对某人或某事可靠性的相信。</p><div class="example muted-example"><p>I have complete confidence in her ability.</p><small>我完全相信她的能力。</small></div></div></div>
+
+                <div class="word-family"><div class="card-heading"><h3>词根与词族双链</h3><button class="text-btn">查看知识网络 →</button></div><div class="family-links"><button>confident <small>已掌握</small></button><button>confidently <small>学习中</small></button><button>self-confidence <small>未学习</small></button></div></div>
+
+                <div class="media-links"><div class="card-heading"><h3>关联的视频与音频</h3><span>3 个主题 · 7 个语境</span></div><button class="media-link" data-view-link="practice"><span class="media-thumb cover-purple">▶</span><div><strong>How to Speak with Confidence</strong><small>Chapter 03 · 02:34 · 跟读 86 分</small></div><em>→</em></button><button class="media-link" data-view-link="listening"><span class="media-thumb cover-teal">♪</span><div><strong>Daily Confidence Practice</strong><small>磨耳朵音频 · 已缓存</small></div><em>→</em></button></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Listening -->
+          <section class="view" id="view-listening" data-title-zh="磨耳朵" data-title-en="Immersive listening">
+            <div class="page-heading">
+              <div><span class="eyebrow">IMMERSIVE LISTENING</span><h1>磨耳朵</h1><p>从学过的内容中随机播放，让英语成为背景声音。</p></div>
+              <div class="button-row"><button class="secondary-btn" id="editPlaylist">编辑列表</button><button class="primary-btn" id="newPlaylist">＋ 新建列表</button></div>
+            </div>
+
+            <div class="listening-layout">
+              <aside class="playlist-panel card">
+                <div class="card-heading"><h3>我的音频列表</h3><button class="icon-btn">↕</button></div>
+                <button class="playlist-item active"><span class="playlist-art p1">♪</span><div><strong>通勤练习</strong><small>12 个音频 · 48 分钟</small></div><em>⋮</em></button>
+                <button class="playlist-item"><span class="playlist-art p2">◎</span><div><strong>发音薄弱内容</strong><small>8 个音频 · 智能列表</small></div><em>⋮</em></button>
+                <button class="playlist-item"><span class="playlist-art p3">☾</span><div><strong>睡前听力</strong><small>16 个音频 · 1.2 小时</small></div><em>⋮</em></button>
+                <button class="playlist-item"><span class="playlist-art p4">◇</span><div><strong>本周生词</strong><small>24 个原句</small></div><em>⋮</em></button>
+                <div class="playlist-summary"><span>离线可用</span><strong>8 / 12</strong><div><i style="width:66%"></i></div><button data-view-link="downloads">管理下载 →</button></div>
+              </aside>
+
+              <article class="audio-player card">
+                <div class="audio-topline"><span class="pill success">✓ 本地音频</span><button class="icon-btn share-page">↗</button></div>
+                <div class="audio-cover"><div class="cover-orbit"><i></i><span>03</span></div></div>
+                <div class="audio-meta"><span>HOW TO SPEAK WITH CONFIDENCE</span><h2>Starting a Conversation</h2><p>Chapter 03 · Sentence 3 of 18</p></div>
+                <div class="audio-scrub"><div><i id="audioProgress"></i></div><span><b id="audioCurrent">02:34</b><b>06:58</b></span></div>
+                <div class="audio-controls"><button id="playMode" title="列表循环">↻</button><button>−5</button><button class="audio-play" id="audioPlay">▶</button><button>+5</button><button id="speedButton">1.0×</button></div>
+                <div class="now-device"><span>♪</span><p><strong>正在播放本地音频</strong><small>高音质 · 18.4 MB</small></p><button>⋮</button></div>
+              </article>
+
+              <article class="listening-lyrics card">
+                <div class="lyrics-toolbar stacked-mobile">
+                  <div class="segmented" id="lyricsLanguage"><button data-lang="en">英文</button><button data-lang="zh">中文</button><button data-lang="bi" class="active">双语</button></div>
+                  <label class="switch-label">高亮生词<input type="checkbox" id="highlightVocabulary" checked /><span class="switch"></span></label>
+                </div>
+                <div class="listening-lines" id="listeningLines">
+                  <div class="listen-line" data-en="Hi, nice to meet you." data-zh="你好，很高兴认识你。"><strong>Hi, nice to meet you.</strong><small>你好，很高兴认识你。</small></div>
+                  <div class="listen-line" data-en="I'm a little nervous, but that's normal." data-zh="我有点紧张，但这很正常。"><strong>I'm a little nervous, but that's normal.</strong><small>我有点紧张，但这很正常。</small></div>
+                  <div class="listen-line active" data-en="The best way to build confidence is to practice every day." data-zh="建立自信最好的方法就是每天坚持练习。"><strong>The best way to build <mark class="vocab-mark" data-default-book="true" data-other-books="2">confidence</mark> is to practice every day.</strong><small>建立自信最好的方法就是每天坚持练习。</small><em>当前句 · 双击生词可移出默认生词本</em></div>
+                  <div class="listen-line" data-en="Start with simple questions and keep an open tone." data-zh="从简单的问题开始，并保持开放友好的语气。"><strong>Start with simple questions and keep an open tone.</strong><small>从简单的问题开始，并保持开放友好的语气。</small></div>
+                  <div class="listen-line" data-en="People usually appreciate a friendly conversation." data-zh="人们通常会喜欢友好的交谈。"><strong>People usually <mark class="vocab-mark">appreciate</mark> a friendly conversation.</strong><small>人们通常会喜欢友好的交谈。</small></div>
+                </div>
+                <div class="timeline-adjust"><div><span>歌词整体偏移</span><strong id="timelineOffset">-0.2s</strong></div><input type="range" id="timelineRange" min="-20" max="20" value="-2" /><button class="text-btn" id="restoreTimeline">恢复默认</button></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Downloads -->
+          <section class="view" id="view-downloads" data-title-zh="离线内容" data-title-en="Offline content">
+            <div class="page-heading"><div><span class="eyebrow">OFFLINE LIBRARY</span><h1>离线内容</h1><p>统一管理视频、音频、字幕和词汇包。</p></div><div class="button-row"><button class="secondary-btn" id="downloadSettings">下载设置</button><button class="primary-btn" id="demoDownload">＋ 缓存新内容</button></div></div>
+
+            <article class="storage-card card"><div class="storage-copy"><span class="metric-icon violet">⇩</span><div><span class="eyebrow">DEVICE STORAGE</span><h3>已使用 3.8 GB</h3><p>视频 2.9 GB · 音频 720 MB · 学习资料 180 MB</p></div></div><div class="storage-bar"><i class="s-video" style="width:58%"></i><i class="s-audio" style="width:15%"></i><i class="s-data" style="width:4%"></i></div><div class="storage-free"><strong>6.2 GB</strong><small>可用空间</small></div></article>
+
+            <div class="downloads-toolbar"><div class="segmented"><button class="active">全部 8</button><button>视频 3</button><button>音频 4</button><button>需要更新 1</button></div><div class="search-box small"><span>⌕</span><input placeholder="搜索离线内容" /></div></div>
+
+            <div class="download-list card" id="downloadList">
+              <div class="download-header"><span><input type="checkbox" id="selectAllDownloads" /> 内容</span><span>类型与质量</span><span>占用空间</span><span>状态</span><span>操作</span></div>
+              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-purple">▶</span><div><strong>How to Speak with Confidence</strong><small>Chapter 01–04 · 英中双语字幕</small></div></div><span>视频 · 720p</span><span>824 MB</span><span class="status success">✓ 已完成</span><div><button class="icon-btn local-play">▶</button><button class="icon-btn download-more">⋮</button></div></article>
+              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-teal">♪</span><div><strong>通勤练习</strong><small>8 / 12 个音频 · 含歌词</small></div></div><span>音频 · 高音质</span><span>186 MB</span><span class="status progress">66% 下载中</span><div><button class="icon-btn pause-download">Ⅱ</button><button class="icon-btn download-more">⋮</button></div></article>
+              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-orange">▶</span><div><strong>English for Better Meetings</strong><small>Chapter 02 · 英文字幕</small></div></div><span>视频 · 360p</span><span>312 MB</span><span class="status warning">↻ 需要更新</span><div><button class="icon-btn redownload">↻</button><button class="icon-btn download-more">⋮</button></div></article>
+              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-blue">Aa</span><div><strong>离线词汇与字幕包</strong><small>268 个词 · 2 种释义语言</small></div></div><span>学习资料</span><span>180 MB</span><span class="status success">✓ 已完成</span><div><button class="icon-btn">↻</button><button class="icon-btn download-more">⋮</button></div></article>
+            </div>
+          </section>
+
+          <!-- Studio -->
+          <section class="view" id="view-studio" data-title-zh="内容工作台" data-title-en="Content studio">
+            <div class="page-heading"><div><span class="eyebrow">AI CONTENT STUDIO</span><h1>音频与 HTML PPT</h1><p>导入本地或在线纯音频，由 AI 生成可编辑、可同步的互动课件。</p></div><button class="secondary-btn">查看项目 12</button></div>
+            <div class="studio-grid">
+              <article class="card import-card"><div class="step-number">1</div><div class="card-heading"><div><span class="eyebrow">SOURCE</span><h3>导入纯音频</h3></div><span class="status success">授权检查开启</span></div><div class="upload-zone" id="uploadZone"><span>⇧</span><strong>拖放音频到这里</strong><p>MP3、M4A、WAV、OGG、FLAC · 支持断点续传</p><button class="secondary-btn">选择本地文件</button></div><div class="or-divider"><span>或者导入在线音频</span></div><div class="url-input"><input value="https://cdn.example.com/lesson-03.mp3" /><button class="primary-btn compact" id="inspectAudio">检查</button></div><div class="source-check" id="sourceCheck"><span>✓</span><div><strong>lesson-03.mp3 · 06:58 · 18.4 MB</strong><small>支持 Range 请求 · 已填写授权信息</small></div></div></article>
+
+              <article class="card ai-config"><div class="step-number">2</div><div class="card-heading"><div><span class="eyebrow">AI CONFIG</span><h3>生成配置</h3></div><button class="text-btn" data-view-link="ai">模型设置 →</button></div><div class="form-grid"><label>生成类型<select><option>逐句教学课件</option><option>内容摘要</option><option>词汇学习</option></select></label><label>页面比例<select><option>16:9</option><option>4:3</option><option>9:16</option></select></label><label>输出语言<select><option>中英双语</option><option>仅英文</option><option>仅中文</option></select></label><label>视觉主题<select><option>经典紫 · 日间</option><option>海洋蓝 · 夜间</option></select></label><label>预计页数<input value="8" /></label><label>动画强度<select><option>轻量</option><option>无动画</option><option>丰富</option></select></label></div><div class="checkbox-grid"><label><input type="checkbox" checked /> 自动同步音频</label><label><input type="checkbox" checked /> 包含重点词汇</label><label><input type="checkbox" checked /> 生成章节总结</label><label><input type="checkbox" /> 生成课后测验</label></div><button class="primary-btn full" id="generatePpt">✦ AI 生成 HTML PPT</button></article>
+
+              <article class="card slide-preview"><div class="step-number">3</div><div class="card-heading"><div><span class="eyebrow">LIVE PREVIEW</span><h3>课件预览</h3></div><div class="button-row"><button class="icon-btn">↶</button><button class="icon-btn">↷</button><button class="secondary-btn compact">保存草稿</button></div></div><div class="slide-canvas"><span class="slide-kicker">CHAPTER 03</span><h2>Build confidence<br /><em>one sentence at a time.</em></h2><p>建立自信，从认真练好每一句开始。</p><div class="slide-words"><span>practice</span><span>confidence</span><span>conversation</span></div><small>02:31.2 — 02:35.8</small></div><div class="slide-strip"><button>＋</button><button class="slide-mini"><span>01</span></button><button class="slide-mini active"><span>02</span></button><button class="slide-mini"><span>03</span></button><button class="slide-mini"><span>04</span></button></div></article>
+            </div>
+          </section>
+
+          <!-- AI -->
+          <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
+            <div class="page-heading"><div><span class="eyebrow">ADMIN · AI ROUTER</span><h1>AI 服务与评分提示词</h1><p>连接不同模型，验证语音能力，并为每项任务配置主模型和备用模型。</p></div><button class="primary-btn" id="addProvider">＋ 添加 API 厂商</button></div>
+            <div class="ai-health-grid"><article class="card provider-card"><div class="provider-logo openai">◎</div><div><span class="status success">● 连接正常</span><h3>OpenAI Compatible</h3><p>内容生成 · 翻译 · HTML PPT</p></div><button class="secondary-btn test-model">测试连接</button></article><article class="card provider-card"><div class="provider-logo azure">A</div><div><span class="status success">● 连接正常</span><h3>Azure Speech</h3><p>语音识别 · 发音评估 · TTS</p></div><button class="secondary-btn test-model">测试语音</button></article><article class="card provider-card"><div class="provider-logo custom">＋</div><div><span class="status muted">未配置</span><h3>备用服务</h3><p>添加 OpenAI-compatible 接口</p></div><button class="secondary-btn" id="configureProvider">配置</button></article></div>
+
+            <div class="ai-layout">
+              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>模型能力与路由</h3></div><button class="text-btn">编辑路由</button></div><div class="capability-table"><div class="cap-head"><span>业务任务</span><span>主模型</span><span>语音</span><span>备用</span></div><div><strong>发音评分</strong><span>Azure Pronunciation</span><span class="yes">✓ 音素级</span><span>Speech Backup</span></div><div><strong>字幕转写</strong><span>Whisper-compatible</span><span class="yes">✓ STT</span><span>Azure Speech</span></div><div><strong>学习反馈</strong><span>GPT-compatible</span><span>—</span><span>Local LLM</span></div><div><strong>HTML PPT</strong><span>GPT-compatible</span><span>—</span><span>Gemini-compatible</span></div></div></article>
+
+              <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs"><button class="active">鼓励型反馈 <span>启用中</span></button><button>严格评分</button><button>儿童学习</button><button>商务英语</button></div><label class="editor-label">System Prompt<textarea id="promptEditor">你是一位耐心、准确的英语发音教练。根据语音服务返回的逐词与音素分数，为学习者提供简洁、可执行的反馈。不要修改原始分数。</textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{word_scores}}</span><span>{{learner_level}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small>v3 · 2026-10-11 更新</small></div><div class="button-row"><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
+            </div>
+          </section>
+
+          <!-- Settings -->
+          <section class="view" id="view-settings" data-title-zh="个人设置" data-title-en="Settings">
+            <div class="page-heading"><div><span class="eyebrow">ACCOUNT & PREFERENCES</span><h1>个人设置</h1><p>管理公开资料、外观、语言、设备和隐私权限。</p></div><button class="secondary-btn" id="authPreview">预览注册 / 登录</button></div>
+            <div class="settings-grid">
+              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status success">昵称已验证</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar">LS</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="LS">LS</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn">上传自定义头像</button></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="LinSpeak" maxlength="24" /><span id="nicknameStatus">✓ 可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160">每天开口十分钟，让英语成为习惯。</textarea><small><span id="signatureCount">19</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
+
+              <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input type="checkbox" /><i class="switch"></i></label></div></article>
+
+              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>默认释义语言<select><option>简体中文</option><option>English</option><option>日本語</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
+
+              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small>MacBook Pro 麦克风 · Mono Ch 1</small></div><span class="status success">已允许</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习、学习目标和下载完成</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">⇩</span><div><strong>离线存储</strong><small>已使用 3.8 GB · 持久化存储</small></div><span class="status success">已允许</span><button class="secondary-btn compact" data-view-link="downloads">管理</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>评分后保留 30 天</small></div><span class="status success">已同意</span><button class="secondary-btn compact">修改</button></div></article>
+            </div>
+          </section>
+        </div>
+
+        <nav class="mobile-nav" aria-label="移动端导航">
+          <button class="active" data-view-link="overview"><span>⌂</span><small>概览</small></button><button data-view-link="practice"><span>▶</span><small>学习</small></button><button data-view-link="vocabulary"><span>◇</span><small>生词本</small></button><button data-view-link="listening"><span>♪</span><small>磨耳朵</small></button><button data-view-link="settings"><span>•••</span><small>更多</small></button>
+        </nav>
+      </main>
+    </div>
+
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+    <dialog class="modal" id="appModal">
+      <form method="dialog">
+        <div class="modal-head"><div><span class="eyebrow" id="modalEyebrow">NOTICE</span><h2 id="modalTitle">提示</h2></div><button class="icon-btn" value="cancel">×</button></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+      </form>
+    </dialog>
+
+    <script src="./app.js?v=2"></script>
+  </body>
+</html>
