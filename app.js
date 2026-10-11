@@ -379,7 +379,41 @@ function setupSettings() {
   $('#signatureInput').addEventListener('input', (event) => $('#signatureCount').textContent = [...event.target.value].length);
   $('#saveProfile').addEventListener('click', () => toast('个人资料已保存，昵称唯一性验证通过。'));
   $('#testMic').addEventListener('click', () => toast('麦克风测试通过 · Mono Ch 1 · 48 kHz。'));
-  $('#authPreview').addEventListener('click', () => showModal({ eyebrow: 'WELCOME TO SHY2SPEAK', title: '登录或创建账号', body: `<div class="auth-tabs"><button class="active" type="button">登录</button><button type="button">注册</button></div><div class="modal-field"><label>邮箱或手机号</label><input placeholder="name@example.com / +86 手机号"></div><div class="modal-field"><label>密码</label><input type="password" placeholder="输入密码"></div><p><button class="text-btn" type="button">使用验证码登录</button> · <button class="text-btn" type="button">找回密码</button></p>`, actions: [{ label: '取消' }, { label: '登录', style: 'primary', onClick: () => toast('这是登录流程的交互预览。') }] }));
+  $('#authPreview').addEventListener('click', () => {
+    let authMode = 'login';
+    let authMethod = 'email';
+    showModal({
+      eyebrow: 'WELCOME TO SHY2SPEAK',
+      title: '登录 Shy2Speak',
+      body: `<div class="auth-tabs" id="authModeTabs"><button class="active" type="button" data-auth-mode="login">登录</button><button type="button" data-auth-mode="register">注册</button></div><strong class="auth-method-label">选择账号方式</strong><div class="auth-methods"><button class="auth-method active" type="button" data-auth-method="email"><span class="auth-method-icon">✉</span><span class="auth-method-copy"><strong>邮箱</strong><small>使用邮箱地址</small></span></button><button class="auth-method" type="button" data-auth-method="phone"><span class="auth-method-icon">☎</span><span class="auth-method-copy"><strong>手机号</strong><small>使用短信验证</small></span></button></div><div class="modal-field"><label id="authAccountLabel" for="authAccount">邮箱地址</label><input id="authAccount" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"><small class="auth-account-help" id="authAccountHelp">登录和密码找回信息将发送到此邮箱。</small></div><div class="modal-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码"></div><div class="auth-support"><button class="text-btn" id="authCodeAction" type="button">使用邮箱验证码</button><button class="text-btn" id="authRecovery" type="button">找回密码</button></div>`,
+      actions: [{ label: '取消' }, { label: '登录', style: 'primary', onClick: () => toast(`${authMethod === 'email' ? '邮箱' : '手机号'}${authMode === 'login' ? '登录' : '注册'}流程预览完成。`) }],
+    });
+
+    const renderAuthChoice = () => {
+      $$('#authModeTabs button').forEach((button) => button.classList.toggle('active', button.dataset.authMode === authMode));
+      $$('.auth-method').forEach((button) => button.classList.toggle('active', button.dataset.authMethod === authMethod));
+      const email = authMethod === 'email';
+      const account = $('#authAccount');
+      $('#modalTitle').textContent = authMode === 'login' ? '登录 Shy2Speak' : '创建 Shy2Speak 账号';
+      $('#authAccountLabel').textContent = email ? '邮箱地址' : '手机号码';
+      account.type = email ? 'email' : 'tel';
+      account.inputMode = email ? 'email' : 'tel';
+      account.autocomplete = email ? 'email' : 'tel';
+      account.placeholder = email ? 'name@example.com' : '+86 请输入手机号码';
+      account.value = '';
+      $('#authAccountHelp').textContent = email ? '登录和密码找回信息将发送到此邮箱。' : '登录验证码和安全通知将发送到此手机号。';
+      $('#authCodeAction').textContent = email ? '使用邮箱验证码' : '使用短信验证码';
+      $('#authPassword').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
+      $('#authPassword').placeholder = authMode === 'login' ? '输入密码' : '设置至少 8 位密码';
+      $('#authRecovery').hidden = authMode === 'register';
+      $('#modalActions .primary-btn').textContent = authMode === 'login' ? '登录' : '创建账号';
+    };
+
+    $$('#authModeTabs button').forEach((button) => button.addEventListener('click', () => { authMode = button.dataset.authMode; renderAuthChoice(); }));
+    $$('.auth-method').forEach((button) => button.addEventListener('click', () => { authMethod = button.dataset.authMethod; renderAuthChoice(); $('#authAccount').focus(); }));
+    $('#authCodeAction').addEventListener('click', () => toast(authMethod === 'email' ? '邮箱验证码流程已选择。' : '短信验证码流程已选择。'));
+    $('#authRecovery').addEventListener('click', () => toast(`将通过${authMethod === 'email' ? '邮箱' : '手机号'}找回密码。`));
+  });
 }
 
 function setupPWA() {
