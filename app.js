@@ -11,7 +11,7 @@ const state = {
   audioDuration: 418,
   speedIndex: 3,
   playModeIndex: 1,
-  definitionLanguage: 'zh',
+  definitionLanguage: localStorage.getItem('shy-definition-language') || 'zh',
   vocabularyRemoved: false,
   cleanupReminder: 1,
 };
@@ -191,8 +191,11 @@ function setupPractice() {
   });
 }
 
-function updateDefinitions(language) {
+function updateDefinitions(language, notify = true) {
   state.definitionLanguage = language;
+  localStorage.setItem('shy-definition-language', language);
+  if ($('#definitionLanguage')) $('#definitionLanguage').value = language;
+  if ($('#defaultDefinitionLanguage')) $('#defaultDefinitionLanguage').value = language;
   $$('[data-definition]').forEach((node) => {
     const entry = definitions[language][node.dataset.definition];
     if (entry) node.textContent = entry[0];
@@ -204,10 +207,11 @@ function updateDefinitions(language) {
     $('#primaryDefinition').textContent = entry[0];
     $('#definitionText').textContent = entry[1];
   }
-  toast(`生词释义已切换为 ${$('#definitionLanguage').selectedOptions[0].textContent}。`);
+  if (notify) toast(`默认释义语言已切换为 ${$('#definitionLanguage').selectedOptions[0].textContent}。`);
 }
 
 function setupVocabulary() {
+  $('#definitionLanguage').value = state.definitionLanguage;
   $('#definitionLanguage').addEventListener('change', (event) => updateDefinitions(event.target.value));
   $$('.word-list-item').forEach((button) => button.addEventListener('click', () => {
     $$('.word-list-item').forEach((item) => item.classList.remove('active'));
@@ -361,6 +365,8 @@ function setupSettings() {
     localStorage.setItem('shy-theme', state.theme); applyAppearance();
   }));
   $('#siteLanguage').addEventListener('change', (event) => { state.language = event.target.value; localStorage.setItem('shy-language', state.language); applyLanguage(); });
+  $('#defaultDefinitionLanguage').value = state.definitionLanguage;
+  $('#defaultDefinitionLanguage').addEventListener('change', (event) => updateDefinitions(event.target.value));
   $$('.avatar-options .avatar').forEach((button) => button.addEventListener('click', () => {
     $$('.avatar-options .avatar').forEach((item) => item.classList.remove('selected'));
     button.classList.add('selected'); $('#profileAvatar').textContent = button.dataset.avatar;
@@ -424,7 +430,7 @@ function setupPWA() {
 }
 
 function init() {
-  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA(); renderAudioTime(); navigate(state.view, false);
+  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA(); updateDefinitions(state.definitionLanguage, false); renderAudioTime(); navigate(state.view, false);
 }
 
 init();

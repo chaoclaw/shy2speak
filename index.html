@@ -8,7 +8,7 @@
     <title>Shy2Speak · 产品原型</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -199,11 +199,15 @@
               <div class="button-row"><button class="text-btn" id="dismissCleanup">不再提示</button><button class="secondary-btn" id="reviewCleanup">检查生词</button></div>
             </div>
 
+            <div class="vocab-preference card">
+              <div class="vocab-preference-copy"><span class="preference-icon">译</span><div><span class="eyebrow">VOCABULARY SETTINGS</span><strong>释义语言</strong><small>控制生词释义、例句翻译和词汇学习反馈的默认语言。</small></div></div>
+              <label><span>当前语言</span><select id="definitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label>
+            </div>
+
             <div class="vocab-toolbar card">
               <div class="search-box"><span>⌕</span><input id="vocabSearch" placeholder="搜索单词、翻译或标签" /></div>
               <label>生词本<select id="wordbookSelect"><option>默认生词本</option><option>商务英语</option><option>本周复习</option></select></label>
-              <label>释义语言<select id="definitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label>
-              <button class="filter-btn">筛选 · 2</button>
+              <button class="filter-btn">更多筛选</button>
             </div>
 
             <div class="vocab-layout">
@@ -319,7 +323,7 @@
 
               <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input type="checkbox" /><i class="switch"></i></label></div></article>
 
-              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>默认释义语言<select><option>简体中文</option><option>English</option><option>日本語</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
+              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>默认释义语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
 
               <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small>MacBook Pro 麦克风 · Mono Ch 1</small></div><span class="status success">已允许</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习、学习目标和下载完成</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">⇩</span><div><strong>离线存储</strong><small>已使用 3.8 GB · 持久化存储</small></div><span class="status success">已允许</span><button class="secondary-btn compact" data-view-link="downloads">管理</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>评分后保留 30 天</small></div><span class="status success">已同意</span><button class="secondary-btn compact">修改</button></div></article>
             </div>
@@ -342,6 +346,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=4"></script>
+    <script src="./app.js?v=5"></script>
   </body>
 </html>
