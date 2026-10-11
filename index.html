@@ -8,7 +8,7 @@
     <title>Shy2Speak · 产品原型</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <div class="app-shell">
@@ -200,8 +200,8 @@
             </div>
 
             <div class="vocab-preference card">
-              <div class="vocab-preference-copy"><span class="preference-icon">译</span><div><span class="eyebrow">VOCABULARY SETTINGS</span><strong>释义语言</strong><small>控制生词释义、例句翻译和词汇学习反馈的默认语言。</small></div></div>
-              <label><span>当前语言</span><select id="definitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label>
+              <div class="vocab-preference-copy"><span class="preference-icon">译</span><div><span class="eyebrow">LEARNING LANGUAGE</span><strong>学习辅助语言</strong><small>英语原文保持不变，释义和例句翻译使用你最熟悉的语言。</small></div></div>
+              <label><span>释义与翻译</span><select id="definitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label>
             </div>
 
             <div class="vocab-toolbar card">
@@ -221,8 +221,8 @@
 
               <article class="word-detail card">
                 <div class="word-detail-head"><div><span class="pill">NOUN · B1</span><h2 id="detailWord">confidence</h2><p><span>/ˈkɒnfɪdəns/ UK</span><button class="sound-btn">🔊</button><span>/ˈkɑːnfɪdəns/ US</span><button class="sound-btn">🔊</button></p></div><div class="button-row"><button class="icon-btn">↗</button><button class="primary-btn compact">已在默认生词本 ✓</button></div></div>
-                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition">信心；自信</strong><p id="definitionText">相信自己有能力完成某事的感觉或状态。</p><div class="example"><span>VIDEO EXAMPLE</span><p>The best way to build <mark>confidence</mark> is to practice a little every day.</p><small>建立自信最好的方法就是每天练习一点。</small><button>▶ 02:34</button></div></div></div>
-                <div class="definition-block"><span class="index">02</span><div><strong>信任；信赖</strong><p>对某人或某事可靠性的相信。</p><div class="example muted-example"><p>I have complete confidence in her ability.</p><small>我完全相信她的能力。</small></div></div></div>
+                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition" dir="auto">信心；自信</strong><p id="definitionText" dir="auto">相信自己有能力完成某事的感觉或状态。</p><div class="example"><span>VIDEO EXAMPLE</span><p>The best way to build <mark>confidence</mark> is to practice a little every day.</p><small data-example-translation="primary" dir="auto">建立自信最好的方法就是每天练习一点。</small><button>▶ 02:34</button></div></div></div>
+                <div class="definition-block"><span class="index">02</span><div><strong>信任；信赖</strong><p>对某人或某事可靠性的相信。</p><div class="example muted-example"><p>I have complete confidence in her ability.</p><small data-example-translation="secondary" dir="auto">我完全相信她的能力。</small></div></div></div>
 
                 <div class="word-family"><div class="card-heading"><h3>词根与词族双链</h3><button class="text-btn">查看知识网络 →</button></div><div class="family-links"><button>confident <small>已掌握</small></button><button>confidently <small>学习中</small></button><button>self-confidence <small>未学习</small></button></div></div>
 
@@ -323,7 +323,7 @@
 
               <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input type="checkbox" /><i class="switch"></i></label></div></article>
 
-              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>默认释义语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="en">English</option><option value="ja">日本語</option><option value="es">Español</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
+              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>英语学习辅助语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
 
               <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small>MacBook Pro 麦克风 · Mono Ch 1</small></div><span class="status success">已允许</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习、学习目标和下载完成</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">⇩</span><div><strong>离线存储</strong><small>已使用 3.8 GB · 持久化存储</small></div><span class="status success">已允许</span><button class="secondary-btn compact" data-view-link="downloads">管理</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>评分后保留 30 天</small></div><span class="status success">已同意</span><button class="secondary-btn compact">修改</button></div></article>
             </div>
@@ -346,6 +346,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=5"></script>
+    <script src="./app.js?v=7"></script>
   </body>
 </html>

@@ -31,15 +31,58 @@ const definitions = {
   zh: {
     confidence: ['信心；自信', '相信自己有能力完成某事的感觉或状态。'], approach: ['方法；接近', '处理问题或接近目标的方法。'], appreciate: ['欣赏；感激', '认识到某事物的价值或表达感谢。'], conversation: ['交谈；对话', '两人或多人之间的信息交流。'], 'build-confidence': ['建立自信', '通过行动和练习逐步增强信心。'],
   },
+  zhHant: {
+    confidence: ['自信；信心', '對自己的能力或特質抱有信任的感受或狀態。'], approach: ['方法；接近', '處理情況或問題的方式。'], appreciate: ['欣賞；感激', '認識某事物的價值或表達感謝。'], conversation: ['對話；交談', '兩人或多人之間的意見交流。'], 'build-confidence': ['建立自信', '透過行動和練習逐步增強自信。'],
+  },
   en: {
     confidence: ['confidence; trust', "a feeling of trust in one's ability or qualities"], approach: ['method; come near', 'a way of dealing with a situation or problem'], appreciate: ['value; be grateful', 'to recognize the value of something'], conversation: ['conversation; dialogue', 'an informal exchange of ideas by spoken words'], 'build-confidence': ['build confidence', 'to gradually become more certain of your ability'],
   },
   ja: {
     confidence: ['自信；信頼', '自分の能力や資質を信じる気持ち。'], approach: ['方法；近づく', '問題や状況に対処する方法。'], appreciate: ['感謝する；評価する', '価値を理解し、感謝すること。'], conversation: ['会話；対話', '複数の人による言葉のやり取り。'], 'build-confidence': ['自信をつける', '練習によって徐々に自信を高める。'],
   },
+  ko: {
+    confidence: ['자신감；신뢰', '자신의 능력이나 자질을 믿는 감정이나 상태.'], approach: ['접근법；다가가다', '상황이나 문제를 다루는 방법.'], appreciate: ['감사하다；가치를 알다', '무언가의 가치를 이해하거나 감사를 표현하다.'], conversation: ['대화；회화', '두 명 이상이 말로 생각을 나누는 것.'], 'build-confidence': ['자신감을 기르다', '행동과 연습을 통해 자신감을 점차 높이다.'],
+  },
   es: {
     confidence: ['confianza; seguridad', 'la sensación de confiar en la propia capacidad'], approach: ['enfoque; acercarse', 'una forma de afrontar una situación'], appreciate: ['apreciar; agradecer', 'reconocer el valor de algo'], conversation: ['conversación; diálogo', 'intercambio de ideas mediante palabras'], 'build-confidence': ['ganar confianza', 'aumentar gradualmente la seguridad personal'],
   },
+  fr: {
+    confidence: ['confiance ; assurance', 'sentiment de croire en ses capacités ou ses qualités.'], approach: ['approche ; méthode', "manière d'aborder une situation ou un problème."], appreciate: ['apprécier ; être reconnaissant', 'reconnaître la valeur de quelque chose ou exprimer sa gratitude.'], conversation: ['conversation ; échange', "échange d'idées entre deux personnes ou plus."], 'build-confidence': ['prendre confiance', "renforcer progressivement sa confiance par l'action et la pratique."],
+  },
+  de: {
+    confidence: ['Selbstvertrauen; Vertrauen', 'das Gefühl, den eigenen Fähigkeiten oder Eigenschaften zu vertrauen.'], approach: ['Ansatz; Methode', 'eine Art, mit einer Situation oder einem Problem umzugehen.'], appreciate: ['schätzen; dankbar sein', 'den Wert von etwas erkennen oder Dankbarkeit zeigen.'], conversation: ['Gespräch; Unterhaltung', 'ein Austausch von Gedanken zwischen zwei oder mehr Personen.'], 'build-confidence': ['Selbstvertrauen aufbauen', 'durch Handeln und Üben allmählich sicherer werden.'],
+  },
+  pt: {
+    confidence: ['confiança; segurança', 'sentimento de acreditar nas próprias capacidades ou qualidades.'], approach: ['abordagem; método', 'uma forma de lidar com uma situação ou problema.'], appreciate: ['apreciar; agradecer', 'reconhecer o valor de algo ou demonstrar gratidão.'], conversation: ['conversa; diálogo', 'troca de ideias entre duas ou mais pessoas.'], 'build-confidence': ['ganhar confiança', 'aumentar gradualmente a confiança por meio de ação e prática.'],
+  },
+  ar: {
+    confidence: ['الثقة بالنفس؛ الثقة', 'شعور بالثقة في قدرات الشخص أو صفاته.'], approach: ['نهج؛ طريقة', 'طريقة للتعامل مع موقف أو مشكلة.'], appreciate: ['يُقدّر؛ يشعر بالامتنان', 'إدراك قيمة شيء ما أو التعبير عن الامتنان.'], conversation: ['محادثة؛ حوار', 'تبادل للأفكار بين شخصين أو أكثر.'], 'build-confidence': ['بناء الثقة بالنفس', 'زيادة الثقة تدريجيًا من خلال العمل والممارسة.'],
+  },
+  hi: {
+    confidence: ['आत्मविश्वास; भरोसा', 'अपनी क्षमताओं या गुणों पर भरोसा होने की भावना।'], approach: ['तरीका; दृष्टिकोण', 'किसी स्थिति या समस्या से निपटने का तरीका।'], appreciate: ['सराहना करना; आभारी होना', 'किसी चीज़ का मूल्य समझना या आभार व्यक्त करना।'], conversation: ['बातचीत; संवाद', 'दो या अधिक लोगों के बीच विचारों का आदान-प्रदान।'], 'build-confidence': ['आत्मविश्वास बढ़ाना', 'अभ्यास और कार्य के माध्यम से धीरे-धीरे आत्मविश्वास बढ़ाना।'],
+  },
+  id: {
+    confidence: ['kepercayaan diri; keyakinan', 'perasaan yakin pada kemampuan atau kualitas diri sendiri.'], approach: ['pendekatan; metode', 'cara menangani situasi atau masalah.'], appreciate: ['menghargai; berterima kasih', 'menyadari nilai sesuatu atau menunjukkan rasa terima kasih.'], conversation: ['percakapan; dialog', 'pertukaran gagasan antara dua orang atau lebih.'], 'build-confidence': ['membangun kepercayaan diri', 'meningkatkan kepercayaan diri secara bertahap melalui tindakan dan latihan.'],
+  },
+  vi: {
+    confidence: ['sự tự tin; niềm tin', 'cảm giác tin tưởng vào khả năng hoặc phẩm chất của bản thân.'], approach: ['cách tiếp cận; phương pháp', 'cách xử lý một tình huống hoặc vấn đề.'], appreciate: ['trân trọng; biết ơn', 'nhận ra giá trị của điều gì đó hoặc thể hiện lòng biết ơn.'], conversation: ['cuộc trò chuyện; hội thoại', 'sự trao đổi ý tưởng giữa hai người trở lên.'], 'build-confidence': ['xây dựng sự tự tin', 'tăng dần sự tự tin thông qua hành động và luyện tập.'],
+  },
+};
+
+const exampleTranslations = {
+  zh: ['建立自信最好的方法就是每天练习一点。', '我完全相信她的能力。'],
+  zhHant: ['建立自信最好的方法就是每天練習一點。', '我完全相信她的能力。'],
+  en: ['The best way to build confidence is to practice a little every day.', 'I have complete confidence in her ability.'],
+  ja: ['自信をつける最良の方法は、毎日少しずつ練習することです。', '私は彼女の能力を完全に信頼しています。'],
+  ko: ['자신감을 기르는 가장 좋은 방법은 매일 조금씩 연습하는 것입니다.', '나는 그녀의 능력을 전적으로 신뢰합니다.'],
+  es: ['La mejor manera de ganar confianza es practicar un poco cada día.', 'Confío plenamente en su capacidad.'],
+  fr: ['La meilleure façon de prendre confiance est de s’exercer un peu chaque jour.', 'J’ai toute confiance en ses capacités.'],
+  de: ['Der beste Weg, Selbstvertrauen aufzubauen, ist, jeden Tag ein wenig zu üben.', 'Ich habe volles Vertrauen in ihre Fähigkeiten.'],
+  pt: ['A melhor maneira de ganhar confiança é praticar um pouco todos os dias.', 'Tenho total confiança na capacidade dela.'],
+  ar: ['أفضل طريقة لبناء الثقة هي التدرب قليلًا كل يوم.', 'لدي ثقة كاملة في قدرتها.'],
+  hi: ['आत्मविश्वास बढ़ाने का सबसे अच्छा तरीका हर दिन थोड़ा अभ्यास करना है।', 'मुझे उसकी क्षमता पर पूरा भरोसा है।'],
+  id: ['Cara terbaik membangun kepercayaan diri adalah berlatih sedikit setiap hari.', 'Saya sepenuhnya percaya pada kemampuannya.'],
+  vi: ['Cách tốt nhất để xây dựng sự tự tin là luyện tập một chút mỗi ngày.', 'Tôi hoàn toàn tin tưởng vào khả năng của cô ấy.'],
 };
 
 const viewTitles = {
@@ -192,13 +235,14 @@ function setupPractice() {
 }
 
 function updateDefinitions(language, notify = true) {
+  if (!definitions[language]) language = 'en';
   state.definitionLanguage = language;
   localStorage.setItem('shy-definition-language', language);
   if ($('#definitionLanguage')) $('#definitionLanguage').value = language;
   if ($('#defaultDefinitionLanguage')) $('#defaultDefinitionLanguage').value = language;
   $$('[data-definition]').forEach((node) => {
     const entry = definitions[language][node.dataset.definition];
-    if (entry) node.textContent = entry[0];
+    if (entry) { node.textContent = entry[0]; node.dir = 'auto'; }
   });
   const active = $('.word-list-item.active');
   const id = active?.dataset.wordId || 'confidence';
@@ -207,7 +251,10 @@ function updateDefinitions(language, notify = true) {
     $('#primaryDefinition').textContent = entry[0];
     $('#definitionText').textContent = entry[1];
   }
-  if (notify) toast(`默认释义语言已切换为 ${$('#definitionLanguage').selectedOptions[0].textContent}。`);
+  const examples = exampleTranslations[language] || exampleTranslations.en;
+  $('[data-example-translation="primary"]').textContent = examples[0];
+  $('[data-example-translation="secondary"]').textContent = examples[1];
+  if (notify) toast(`英语学习辅助语言已切换为 ${$('#definitionLanguage').selectedOptions[0].textContent}。`);
 }
 
 function setupVocabulary() {
