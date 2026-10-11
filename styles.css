@@ -70,6 +70,7 @@ a { color:inherit; }
 .side-nav { display:flex; flex-direction:column; gap:5px; }
 .nav-item { position:relative; width:100%; min-height:46px; display:flex; align-items:center; gap:12px; border:0; background:transparent; border-radius:12px; padding:0 13px; color:var(--text-soft); text-align:left; transition:.18s; }
 .nav-item > span { width:23px; height:23px; display:grid; place-items:center; font-weight:700; font-size:15px; }
+.nav-item > span svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
 .nav-item b { flex:1; font-weight:600; font-size:14px; }
 .nav-item em { font-style:normal; font-size:10px; min-width:20px; height:20px; padding:0 5px; border-radius:9px; display:grid; place-items:center; color:var(--primary); background:var(--primary-soft); }
 .nav-item:hover { color:var(--text); background:var(--surface-soft); }
