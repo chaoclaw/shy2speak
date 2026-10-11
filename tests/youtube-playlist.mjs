@@ -26,9 +26,18 @@ assert.equal(normalized.topics[1].chapters[0].title, 'Full video');
 
 let call;
 const fetched = await fetchYouTubePlaylist(playlistId, seed, {
+  getInnertubeData: async () => { throw new Error('simulated Innertube outage'); },
   getPlaylistData: async (...args) => { call = args; return result; },
 });
 assert.deepEqual(call, [playlistId, 100], 'playlist discovery must request enough entries for the 85-video course');
 assert.equal(fetched.topics.length, 2);
+
+let innertubeCall;
+const innertubeFetched = await fetchYouTubePlaylist(playlistId, seed, {
+  getInnertubeData: async (...args) => { innertubeCall = args; return result; },
+  getPlaylistData: async () => { throw new Error('page fallback should not run'); },
+});
+assert.deepEqual(innertubeCall, [playlistId, 20_000]);
+assert.equal(innertubeFetched.topics.length, 2, 'Innertube should be the primary playlist source');
 
 console.log('youtube-playlist: ordered playlist discovery and topic normalization valid');

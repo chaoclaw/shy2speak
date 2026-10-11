@@ -19,6 +19,7 @@
     "nodemailer": "^10.1.0",
     "pg": "^8.16.3",
     "youtube-caption-extractor": "^1.10.2",
-    "youtube-search-api": "^2.0.1"
+    "youtube-search-api": "^2.0.1",
+    "youtubei.js": "^18.1.0"
   }
 }

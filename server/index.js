@@ -305,13 +305,13 @@ async function hydratedYouTubeTopic(topic) {
   return sync;
 }
 
-function fallbackPlaylist(catalog, playlistId) {
+function fallbackPlaylist(catalog, playlistId, syncError = '') {
   const topics = catalog.topics.map((topic) => ({
     ...topic,
     serverManaged: true,
     localizedTitles: { en: topic.title, ...(topic.localizedTitles || {}) },
   }));
-  return { playlistId, topics, videoCount: topics.length, syncStatus: 'fallback' };
+  return { playlistId, topics, videoCount: topics.length, syncStatus: 'fallback', syncError: String(syncError).slice(0, 500) };
 }
 
 async function syncedPlaylist(catalog) {
@@ -324,7 +324,7 @@ async function syncedPlaylist(catalog) {
   const cached = cachedResult.rows[0];
   if (cached && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
   if (!YOUTUBE_PLAYLIST_SYNC_ENABLED || Number(playlistFailureCooldowns.get(playlistId) || 0) > Date.now()) {
-    return cached?.payload || fallbackPlaylist(catalog, playlistId);
+    return cached?.payload || fallbackPlaylist(catalog, playlistId, YOUTUBE_PLAYLIST_SYNC_ENABLED ? 'Retry cooldown active' : 'Playlist sync disabled');
   }
   if (playlistSyncPromises.has(playlistId)) return playlistSyncPromises.get(playlistId);
 
@@ -341,7 +341,7 @@ async function syncedPlaylist(catalog) {
     } catch (error) {
       playlistFailureCooldowns.set(playlistId, Date.now() + 10 * 60 * 1000);
       console.warn('YouTube playlist sync unavailable:', playlistId, error.message);
-      return cached?.payload || fallbackPlaylist(catalog, playlistId);
+      return cached?.payload || fallbackPlaylist(catalog, playlistId, error.message);
     } finally {
       playlistSyncPromises.delete(playlistId);
     }
@@ -362,6 +362,7 @@ async function playlistCatalog() {
       captionRuntime: 'NAS server public YouTube captions on demand with PostgreSQL cache',
       videoCount: playlist.topics.length,
       playlistSyncStatus: playlist.syncStatus || 'cached',
+      ...(playlist.syncError ? { playlistSyncError: playlist.syncError } : {}),
     },
     topics: playlist.topics,
   };

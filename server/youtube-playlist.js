@@ -1,10 +1,47 @@
 import axios from 'axios';
 import youtubeSearchApi from 'youtube-search-api';
+import { Innertube } from 'youtubei.js';
 
 const { GetPlaylistData } = youtubeSearchApi;
 axios.defaults.timeout = 20_000;
 axios.defaults.headers.common['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36 Shy2Speak/1.0';
 axios.defaults.headers.common['Accept-Language'] = 'en-US,en;q=0.9';
+
+function timedFetch(timeoutMs) {
+  return (input, init = {}) => {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+    return fetch(input, { ...init, signal });
+  };
+}
+
+async function getPlaylistWithInnertube(playlistId, timeoutMs) {
+  const client = await Innertube.create({
+    lang: 'en',
+    location: 'US',
+    retrieve_player: false,
+    generate_session_locally: true,
+    enable_session_cache: false,
+    fetch: timedFetch(timeoutMs),
+  });
+  let page = await client.getPlaylist(playlistId);
+  const title = String(page.info?.title || '').trim();
+  const items = [];
+  for (let continuation = 0; continuation < 10; continuation += 1) {
+    for (const item of page.items || []) {
+      items.push({
+        id: item?.id,
+        title: String(item?.title || '').trim(),
+        channelTitle: item?.author?.name || '',
+        thumbnail: { thumbnails: item?.thumbnails || [] },
+        length: item?.duration?.text || '',
+      });
+    }
+    if (!page.has_continuation || items.length >= 500) break;
+    page = await page.getContinuation();
+  }
+  return { items, metadata: { title } };
+}
 
 function textValue(value) {
   if (typeof value === 'string') return value.trim();
@@ -95,16 +132,34 @@ export function normalizePlaylistResult(result, playlistId, seedTopics = []) {
   };
 }
 
-export async function fetchYouTubePlaylist(playlistId, seedTopics = [], { timeoutMs = 20_000, getPlaylistData = GetPlaylistData } = {}) {
+export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
+  timeoutMs = 20_000,
+  getInnertubeData = getPlaylistWithInnertube,
+  getPlaylistData = GetPlaylistData,
+} = {}) {
   if (!/^PL[\w-]+$/.test(playlistId || '')) throw new Error('Invalid YouTube playlist ID');
-  let timer;
+  const runWithTimeout = async (operation) => {
+    let timer;
+    try {
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('YouTube playlist request timed out')), timeoutMs);
+      });
+      return await Promise.race([operation(), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  let innertubeError;
   try {
-    const timeout = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('YouTube playlist request timed out')), timeoutMs);
-    });
-    const result = await Promise.race([getPlaylistData(playlistId, 100), timeout]);
+    const result = await runWithTimeout(() => getInnertubeData(playlistId, timeoutMs));
     return normalizePlaylistResult(result, playlistId, seedTopics);
-  } finally {
-    clearTimeout(timer);
+  } catch (error) {
+    innertubeError = error;
+  }
+  try {
+    const result = await runWithTimeout(() => getPlaylistData(playlistId, 100));
+    return normalizePlaylistResult(result, playlistId, seedTopics);
+  } catch (fallbackError) {
+    throw new Error(`YouTube playlist APIs unavailable (Innertube: ${innertubeError?.message || 'unknown'}; page fallback: ${fallbackError.message})`);
   }
 }

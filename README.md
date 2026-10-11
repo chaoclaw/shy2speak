@@ -78,7 +78,7 @@ docker compose -f compose.ugreen.yml exec -T database pg_dump -U shy2speak shy2s
 ## 数据与服务边界
 
 - 视频使用 `youtube-nocookie.com` 官方嵌入播放器，不重新分发受版权保护的视频或音频。
-- 播放列表发现使用 MIT 许可的 `youtube-search-api`，公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`。它们只读取公开元数据与字幕轨道，不下载或重新分发视频、音频。
+- 播放列表发现使用 MIT 许可的 `youtubei.js`，并以同样为 MIT 许可的 `youtube-search-api` 作为备用；公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`。它们只读取公开元数据与字幕轨道，不下载或重新分发视频、音频。
 - `data/catalog.json` 保存课程结构。逐句稿会标记来源；未获得公开视频字幕时仍显示“待核对”，不会冒充准确字幕。
 - 麦克风录音使用浏览器 `MediaRecorder`。只有配置真实评分端点并返回完整评分后，才保存 AI 分数。
 - AI Key 只保存在当前浏览器标签页；生产环境后续可把指定厂商调用迁移到 NAS API 代理。
