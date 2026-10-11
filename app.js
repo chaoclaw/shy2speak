@@ -529,7 +529,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=17', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=18', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -778,17 +778,54 @@ function applyAppearance() {
   document.documentElement.dataset.reduceMotion = state.reduceMotion;
   document.documentElement.dataset.highContrast = state.highContrast;
   $('#modeIcon').textContent = resolvedMode === 'dark' ? '☾' : '☼';
-  const modeToggleLabel = resolvedMode === 'dark' ? '切换到日间模式' : '切换到夜间模式';
-  $('#modeToggle').setAttribute('aria-label', modeToggleLabel);
-  $('#modeToggle').dataset.hoverHint = modeToggleLabel;
-  $('#modeToggle').removeAttribute('title');
   const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
   $('meta[name="theme-color"]').setAttribute('content', themeColor);
   $$('.mode-choices button').forEach((button) => button.classList.toggle('active', button.dataset.modeChoice === state.mode));
   $$('.palette').forEach((button) => button.classList.toggle('active', button.dataset.themeChoice === state.theme));
-  const modeNames = { light: '日间', dark: '夜间', system: '跟随系统' };
-  const themeNames = { violet: '经典紫', ocean: '海洋蓝', forest: '森林绿', sunset: '日落橙', sakura: '樱花粉' };
+  const modeNames = state.language === 'en'
+    ? { light: 'Light', dark: 'Dark', system: 'System' }
+    : { light: '日间', dark: '夜间', system: '跟随系统' };
+  const themeNames = state.language === 'en'
+    ? { violet: 'Violet', ocean: 'Ocean', forest: 'Forest', sunset: 'Sunset', sakura: 'Sakura' }
+    : { violet: '经典紫', ocean: '海洋蓝', forest: '森林绿', sunset: '日落橙', sakura: '樱花粉' };
   if ($('#appearanceLabel')) $('#appearanceLabel').textContent = `${modeNames[state.mode]} · ${themeNames[state.theme]}`;
+  updateChromeHoverLabels();
+}
+
+function updateChromeHoverLabels() {
+  const english = state.language === 'en';
+  const dark = document.documentElement.dataset.mode === 'dark';
+  const labels = english ? {
+    language: 'Switch interface language to Chinese',
+    mode: dark ? 'Switch to light mode' : 'Switch to dark mode',
+    share: 'Share this page',
+    notifications: 'Notifications',
+    profile: 'Profile and settings',
+    home: 'Shy2Speak home',
+    more: 'More settings',
+  } : {
+    language: '切换界面语言为英文',
+    mode: dark ? '切换到日间模式' : '切换到夜间模式',
+    share: '分享当前页面',
+    notifications: '通知',
+    profile: '个人资料与设置',
+    home: 'Shy2Speak 首页',
+    more: '更多设置',
+  };
+  const setLabel = (node, label) => {
+    if (!node) return;
+    node.setAttribute('aria-label', label);
+    node.dataset.hoverHint = label;
+    node.removeAttribute('title');
+  };
+  setLabel($('#languageToggle'), labels.language);
+  setLabel($('#modeToggle'), labels.mode);
+  setLabel($('.top-actions .share-page'), labels.share);
+  setLabel($('.top-actions .notification-btn'), labels.notifications);
+  setLabel($('.top-actions .top-avatar'), labels.profile);
+  setLabel($('.sidebar .brand'), labels.home);
+  setLabel($('.mini-profile .avatar'), labels.profile);
+  setLabel($('.mini-profile .icon-btn'), labels.more);
 }
 
 function applyLanguage() {
@@ -799,6 +836,7 @@ function applyLanguage() {
   });
   $('#languageToggle').textContent = state.language === 'zh' ? '中 / EN' : 'EN / 中';
   $('#siteLanguage').value = state.language;
+  applyAppearance();
   updatePageTitle();
   if (state.catalog) {
     renderPracticeTopic();
@@ -1709,9 +1747,12 @@ function setupPWA() {
 }
 
 async function init() {
+  applyAppearance();
+  applyLanguage();
+  document.documentElement.classList.add('app-ready');
   const account = await shyBackend.initialize().catch((error) => ({ session: null, error }));
   state.authSession = account.session || null;
-  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls(); setupHoverToasts();
+  setupNavigation(); setupGlobalControls(); setupHoverToasts();
   await loadCatalog();
   setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();

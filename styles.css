@@ -57,7 +57,9 @@ html[data-reduce-motion="true"] *,html[data-reduce-motion="true"] *:before,html[
 * { box-sizing:border-box; }
 .hidden { display:none!important; }
 html { scroll-behavior:smooth; }
-body { margin:0; min-width:320px; background:var(--background); color:var(--text); font-family:'DM Sans','Noto Sans SC',system-ui,sans-serif; line-height:1.45; transition:background .25s ease,color .25s ease; }
+body { margin:0; min-width:320px; background:var(--background); color:var(--text); font-family:'DM Sans','Noto Sans SC',system-ui,sans-serif; line-height:1.45; opacity:0; animation:initialReveal .01s 2s forwards; transition:background .25s ease,color .25s ease; }
+html.app-ready body { opacity:1; animation:none; }
+@keyframes initialReveal { to { opacity:1; } }
 button,input,select,textarea { font:inherit; }
 button { color:inherit; }
 button,[data-view-link] { cursor:pointer; }

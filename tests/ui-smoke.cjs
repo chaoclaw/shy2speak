@@ -82,6 +82,19 @@ async function main() {
   await page.locator('.top-actions .share-page').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === '分享当前页面');
 
+  await page.evaluate(() => localStorage.setItem('shy-language', 'en'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('html.app-ready');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'saved English should apply before the app becomes visible');
+  assert.equal(await page.locator('body').evaluate((node) => getComputedStyle(node).opacity), '1', 'the app should become visible after applying the saved language');
+  assert.equal(await page.locator('#pageTitle').textContent(), 'Video practice', 'refresh should restore the English interface');
+  await page.locator('#languageToggle').hover();
+  await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === 'Switch interface language to Chinese');
+  assert.equal(await page.locator('#languageToggle').getAttribute('aria-label'), 'Switch interface language to Chinese', 'top-right language guidance should follow the interface language');
+  await page.evaluate(() => localStorage.setItem('shy-language', 'zh'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#topicSelect option', { state: 'attached' });
+
   const desktopLayout = await page.evaluate(() => {
     const video = document.querySelector('.practice-learning .video-card').getBoundingClientRect();
     const lyrics = document.querySelector('.practice-learning .lyrics-card').getBoundingClientRect();
