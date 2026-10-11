@@ -12,6 +12,8 @@ const state = {
   speedIndex: 3,
   playModeIndex: 1,
   definitionLanguage: localStorage.getItem('shy-definition-language') || 'zh',
+  vocabularyData: null,
+  activeWordId: 'shopping-mall',
   vocabularyRemoved: false,
   cleanupReminder: 1,
   catalog: null,
@@ -24,11 +26,15 @@ const state = {
   recordingChunks: [],
   promptId: localStorage.getItem('shy-prompt-id') || 'encouraging',
   studioSource: null,
+  listeningPlaylistId: 'mall-all',
+  listeningTrackIndex: 0,
+  listeningPlaybackToken: 0,
   reduceMotion: localStorage.getItem('shy-reduce-motion') === 'true',
   highContrast: localStorage.getItem('shy-high-contrast') === 'true',
   authSession: null,
   accountReady: false,
   lastSyncedAt: null,
+  pendingAvatar: null,
 };
 
 const STORAGE_KEYS = {
@@ -38,6 +44,7 @@ const STORAGE_KEYS = {
   youtubeMetadata: 'shy-youtube-metadata-v1',
   providers: 'shy-ai-providers-v1',
   prompts: 'shy-ai-prompts-v1',
+  vocabulary: 'shy-vocabulary-v1',
   profile: 'shy-profile-v1',
   sync: 'shy-cloud-sync-v1',
 };
@@ -48,6 +55,40 @@ const DEFAULT_PROMPTS = [
   { id: 'children', name: '儿童学习', system: '你是一位友善的少儿英语老师。使用积极、简短且容易理解的语言反馈发音问题，每次只给一个改进建议。', isDefault: true },
   { id: 'business', name: '商务英语', system: '你是一位商务英语表达教练。结合语音评分说明清晰度、语气与专业表达，并给出一句可立即模仿的建议。', isDefault: true }
 ];
+
+const LISTENING_PLAYLISTS = {
+  'mall-all': {
+    title: 'Mall Vocabulary 测试集',
+    tracks: [
+      { en: 'Welcome to the shopping mall.', zh: '欢迎来到购物中心。', words: ['shopping-mall'] },
+      { en: 'Take the escalator to the second floor.', zh: '乘自动扶梯到二楼。', words: ['escalator'] },
+      { en: 'The fitting room is next to the cashier.', zh: '试衣间在收银员旁边。', words: ['fitting-room', 'cashier'] },
+      { en: 'Please keep your receipt after you pay.', zh: '付款后请保留小票。', words: ['receipt'] },
+    ],
+  },
+  'mall-facilities': {
+    title: '商场设施',
+    tracks: [
+      { en: 'Take the escalator to the second floor.', zh: '乘自动扶梯到二楼。', words: ['escalator'] },
+      { en: 'Where is the fitting room?', zh: '试衣间在哪里？', words: ['fitting-room'] },
+    ],
+  },
+  checkout: {
+    title: '结账场景',
+    tracks: [
+      { en: 'You can pay the cashier by card or in cash.', zh: '你可以向收银员刷卡或付现金。', words: ['cashier'] },
+      { en: 'Please keep your receipt in case you need a refund.', zh: '请保留小票，以便需要退款时使用。', words: ['receipt'] },
+    ],
+  },
+  'weekly-review': {
+    title: '本周生词',
+    tracks: [
+      { en: 'Escalator.', zh: '自动扶梯。', words: ['escalator'] },
+      { en: 'Fitting room.', zh: '试衣间。', words: ['fitting-room'] },
+      { en: 'Receipt.', zh: '收据；小票。', words: ['receipt'] },
+    ],
+  },
+};
 
 function readStoredJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -71,12 +112,20 @@ function storedProfile() {
   return readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
 }
 
+function applyAvatarVisual(node, avatar, fallback = 'LS') {
+  if (!node) return;
+  const custom = /^data:image\/(?:png|jpeg|webp);base64,/i.test(String(avatar || ''));
+  node.classList.toggle('custom-avatar', custom);
+  node.style.backgroundImage = custom ? `url(${JSON.stringify(avatar)})` : '';
+  node.textContent = custom ? '' : (avatar || fallback);
+}
+
 function updateProfileChrome(profile = storedProfile()) {
   const nickname = profile.nickname || 'Learner';
   const shortName = nickname.length > 12 ? `${nickname.slice(0, 12)}…` : nickname;
   if ($('#sidebarNickname')) $('#sidebarNickname').textContent = shortName;
   if ($('#welcomeNickname')) $('#welcomeNickname').textContent = nickname.split(/\s+/)[0];
-  $$('.top-avatar,.mini-profile .avatar').forEach((node) => { node.textContent = profile.avatar || nickname.slice(0, 2).toUpperCase(); });
+  $$('.top-avatar,.mini-profile .avatar').forEach((node) => applyAvatarVisual(node, profile.avatar, nickname.slice(0, 2).toUpperCase()));
 }
 
 function setSyncMessage(title, meta, kind = 'warning') {
@@ -342,6 +391,90 @@ const copy = {
   },
 };
 
+const originalUiText = new WeakMap();
+const originalUiAttributes = new WeakMap();
+let languageObserver;
+
+function translatedUiText(value) {
+  const dictionary = window.SHY_I18N?.en || {};
+  if (dictionary[value]) return dictionary[value];
+  return value
+    .replace(/^今天再练 (\d+) 分钟$/, 'Practice $1 more min today')
+    .replace(/^● 已记录 (\d+) 个学习日$/, '● $1 active learning days recorded')
+    .replace(/^你已经完成 (\d+) 次逐句练习；每次练习时长与录音次数都保存在当前设备。$/, 'You have completed $1 sentence practices; time and recording counts are saved on this device.')
+    .replace(/^最近一次真实评分为 (\d+) 分；继续练习当前句子以观察变化。$/, 'Your latest verified score is $1; keep practicing this sentence to track progress.')
+    .replace(/^(\d+) 次逐句练习$/, '$1 sentence practices')
+    .replace(/^(\d+) 次真实评分$/, '$1 verified scores')
+    .replace(/^跟读 (\d+) 分钟$/, 'Speaking $1 min')
+    .replace(/^听力 (\d+) 分钟$/, 'Listening $1 min')
+    .replace(/^复习 (\d+) 分钟$/, 'Review $1 min')
+    .replace(/^(\d+) 个词 · 今天待复习 (\d+) 个$/, '$1 words · $2 due today')
+    .replace(/^(\d+) 小节 · 数据可扩展$/, '$1 sections · extensible data')
+    .replace(/^(\d+) 个重点词 · 自动标记 · 约 (\d+) 分钟$/, '$1 key words · auto-tagged · about $2 min')
+    .replace(/^已使用 (.+)$/, '$1 used')
+    .replace(/^浏览器总配额 (.+) · 数据来自 Storage API$/, 'Browser quota $1 · reported by Storage API')
+    .replace(/^已用 (.+) · 配额 (.+)$/, '$1 used · $2 quota')
+    .replace(/^有 (\d+) 个词已从默认生词本移除$/, '$1 words were removed from the default wordbook')
+    .replace(/^已选择 (\d+) \/ (\d+)$/, 'Selected $1 / $2')
+    .replace(/^(.+) · (V[\w-]+) · YouTube 官方播放$/, '$1 · $2 · Official YouTube playback')
+    .replace(/^(\d+) 个词 · 关联主题 (.+)$/, '$1 words · linked topic $2')
+    .replace(/^(\d+) 个词 · /, '$1 words · ')
+    .replace(/^(\d+) 个主题$/, '$1 topics')
+    .replace(/^(\d+) 段/, '$1 clips')
+    .replace(/仍在：/, 'Still in: ')
+    .replace(/个真实课程词汇/, ' real course words')
+    .replace(/正在读取主题数/, 'loading topic count')
+    .replace(/个主题$/, ' topics');
+}
+
+function localizeUi(root = document) {
+  const english = state.language === 'en'; const dictionary = window.SHY_I18N?.en || {}; const placeholderDictionary = window.SHY_I18N?.placeholders || {};
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue.trim() || node.parentElement?.closest('script,style,[data-i18n],[data-no-auto-i18n]')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((node) => {
+    if (!originalUiText.has(node)) originalUiText.set(node, node.nodeValue);
+    else {
+      const known = originalUiText.get(node); const current = node.nodeValue;
+      if (current.trim() !== known.trim() && current.trim() !== translatedUiText(known.trim())) originalUiText.set(node, current);
+    }
+    const original = originalUiText.get(node); const trimmed = original.trim();
+    const next = english ? translatedUiText(trimmed) : trimmed;
+    const leading = original.match(/^\s*/)?.[0] || ''; const trailing = original.match(/\s*$/)?.[0] || '';
+    const value = `${leading}${next}${trailing}`; if (node.nodeValue !== value) node.nodeValue = value;
+  });
+  const elements = root.querySelectorAll ? [root, ...root.querySelectorAll('[placeholder],[aria-label],[title]')].filter((node) => node instanceof Element) : [];
+  elements.forEach((element) => {
+    if (!originalUiAttributes.has(element)) originalUiAttributes.set(element, {});
+    const originals = originalUiAttributes.get(element);
+    for (const attribute of ['placeholder', 'aria-label', 'title']) {
+      if (!element.hasAttribute(attribute)) continue;
+      originals[attribute] ||= element.getAttribute(attribute);
+      const source = originals[attribute];
+      const next = english ? (placeholderDictionary[source] || dictionary[source] || translatedUiText(source)) : source;
+      if (element.getAttribute(attribute) !== next) element.setAttribute(attribute, next);
+    }
+  });
+}
+
+function setupLanguageObserver() {
+  if (languageObserver) return;
+  languageObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'characterData') localizeUi(mutation.target.parentElement || document);
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) localizeUi(node);
+        else if (node.nodeType === Node.TEXT_NODE && node.parentElement) localizeUi(node.parentElement);
+      });
+    });
+  });
+  languageObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+}
+
 const definitions = {
   zh: {
     confidence: ['信心；自信', '相信自己有能力完成某事的感觉或状态。'], approach: ['方法；接近', '处理问题或接近目标的方法。'], appreciate: ['欣赏；感激', '认识到某事物的价值或表达感谢。'], conversation: ['交谈；对话', '两人或多人之间的信息交流。'], 'build-confidence': ['建立自信', '通过行动和练习逐步增强信心。'],
@@ -435,8 +568,9 @@ function topicDisplayLabel(topic) {
 
 async function ensureTopicTitleTranslation(topic) {
   if (!topic?.videoId || state.language === 'en' || localizedTopicTitle(topic)) return;
-  const provider = readStoredJSON(STORAGE_KEYS.providers, {}).openai;
-  const apiKey = sessionStorage.getItem('shy-ai-key-openai');
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {});
+  const provider = providers.primary || providers.openai;
+  const apiKey = sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
   if (!provider?.lastTestOk || !provider?.model || !apiKey) return;
   const key = `${topic.videoId}:${state.language}`;
   if (topicTranslationPromises.has(key)) return topicTranslationPromises.get(key);
@@ -529,7 +663,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=18', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=19', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -837,6 +971,7 @@ function applyLanguage() {
   $('#languageToggle').textContent = state.language === 'zh' ? '中 / EN' : 'EN / 中';
   $('#siteLanguage').value = state.language;
   applyAppearance();
+  localizeUi();
   updatePageTitle();
   if (state.catalog) {
     renderPracticeTopic();
@@ -1003,6 +1138,21 @@ function setupHoverToasts() {
   addEventListener('resize', hide, { passive: true });
 }
 
+function setupNotifications() {
+  const button = $('#notificationButton'); const dot = $('#notificationDot');
+  const readKey = 'shy-notifications-read-v1';
+  dot.classList.toggle('hidden', localStorage.getItem(readKey) === 'true');
+  button.addEventListener('click', () => {
+    localStorage.setItem(readKey, 'true'); dot.classList.add('hidden');
+    const identity = state.authSession?.user?.email || state.authSession?.user?.phone;
+    showModal({
+      eyebrow: 'NOTIFICATIONS', title: state.language === 'en' ? 'Notifications' : '通知中心',
+      body: `<div class="notification-list"><article><span>✓</span><div><strong>${identity ? (state.language === 'en' ? 'Account signed in' : '账号已登录') : (state.language === 'en' ? 'Local learning mode' : '本机学习模式')}</strong><small>${escapeHTML(identity || (state.language === 'en' ? 'Sign in to sync across devices.' : '登录后可跨设备同步学习记录。'))}</small></div></article><article><span>5</span><div><strong>${state.language === 'en' ? 'Mall Vocabulary review' : 'Mall Vocabulary 生词复习'}</strong><small>${state.language === 'en' ? 'Five topic-linked words are ready for testing.' : '已准备 5 个关联测试视频的真实主题词汇。'}</small></div></article><article><span>♪</span><div><strong>${state.language === 'en' ? 'Listening test set ready' : 'Listening 测试集已就绪'}</strong><small>${state.language === 'en' ? 'Four browser TTS clips can be played now.' : '4 段浏览器 TTS 测试音频现在可以播放。'}</small></div></article></div>`,
+      actions: [{ label: state.language === 'en' ? 'Done' : '完成', style: 'primary' }],
+    });
+  });
+}
+
 async function startRecording() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     toast('当前浏览器不支持网页录音，请使用最新版 Chrome、Edge 或 Safari。');
@@ -1160,80 +1310,259 @@ function setupPractice() {
 }
 
 function updateDefinitions(language, notify = true) {
-  if (!definitions[language]) language = 'en';
+  if (!$('#definitionLanguage option').length || ![...$('#definitionLanguage').options].some((option) => option.value === language)) language = 'en';
   state.definitionLanguage = language;
   localStorage.setItem('shy-definition-language', language);
   if ($('#definitionLanguage')) $('#definitionLanguage').value = language;
   if ($('#defaultDefinitionLanguage')) $('#defaultDefinitionLanguage').value = language;
-  $$('[data-definition]').forEach((node) => {
-    const entry = definitions[language][node.dataset.definition];
-    if (entry) { node.textContent = entry[0]; node.dir = 'auto'; }
-  });
-  const active = $('.word-list-item.active');
-  const id = active?.dataset.wordId || 'confidence';
-  const entry = definitions[language][id];
-  if (entry) {
-    $('#primaryDefinition').textContent = entry[0];
-    $('#definitionText').textContent = entry[1];
-  }
-  const examples = exampleTranslations[language] || exampleTranslations.en;
-  $('[data-example-translation="primary"]').textContent = examples[0];
-  $('[data-example-translation="secondary"]').textContent = examples[1];
+  renderVocabulary();
   if (notify) toast(`英语学习辅助语言已切换为 ${$('#definitionLanguage').selectedOptions[0].textContent}。`);
 }
 
-function setupVocabulary() {
+function vocabularyTranslation(item) {
+  return item?.translations?.[state.definitionLanguage] || item?.translations?.en || [item?.term || '', ''];
+}
+
+function renderVocabularyDetail(item) {
+  if (!item) return;
+  const translation = vocabularyTranslation(item);
+  state.activeWordId = item.id;
+  $('#detailTypeLevel').textContent = `${String(item.partOfSpeech || 'word').toUpperCase()} · ${item.level || '—'}`;
+  $('#detailWord').textContent = item.term;
+  $('#detailPhonetic').textContent = item.phonetic || '';
+  $('#primaryDefinition').textContent = translation[0];
+  $('#definitionText').textContent = translation[1];
+  $('#detailExample').textContent = item.example?.en || '';
+  $('#detailExampleTranslation').textContent = state.definitionLanguage === 'en' ? (item.example?.en || '') : (item.example?.[state.definitionLanguage] || item.example?.zh || item.example?.en || '');
+  $('#detailBookStatus').textContent = item.removedFromDefault ? '仅在其他生词本' : '已在默认生词本 ✓';
+  $('#detailBookStatus').classList.toggle('secondary-btn', item.removedFromDefault);
+  $('#detailBookStatus').classList.toggle('primary-btn', !item.removedFromDefault);
+  const related = $('#detailRelated');
+  related.replaceChildren(...(item.related || []).map((word) => {
+    const button = document.createElement('button'); button.textContent = word; return button;
+  }));
+  const source = state.vocabularyData?.source || {};
+  $('#detailMediaTitle').textContent = source.title || 'Mall Vocabulary In English';
+  $('#detailMediaMeta').textContent = `${source.chapterTitle || 'Full video'} · ${source.videoId || 'VFe7Ap1kfk0'} · YouTube 官方播放`;
+  $$('.word-list-item').forEach((button) => button.classList.toggle('active', button.dataset.wordId === item.id));
+}
+
+function vocabularyCleanupItems() {
+  return (state.vocabularyData?.items || []).filter((item) => item.removedFromDefault && item.books?.length);
+}
+
+function renderVocabulary() {
+  if (!state.vocabularyData) return;
+  const query = $('#vocabSearch')?.value.trim().toLowerCase() || '';
+  const selectedBook = $('#wordbookSelect')?.value || '全部生词本';
+  const items = state.vocabularyData.items.filter((item) => {
+    const translated = vocabularyTranslation(item).join(' ').toLowerCase();
+    const matchesQuery = !query || `${item.term} ${translated}`.toLowerCase().includes(query);
+    const matchesBook = selectedBook === '全部生词本' || item.books?.some((book) => book.name === selectedBook);
+    return matchesQuery && matchesBook;
+  });
+  const list = $('#wordList');
+  list.replaceChildren(...items.map((item) => {
+    const button = document.createElement('button');
+    button.className = 'word-list-item'; button.dataset.wordId = item.id;
+    const content = document.createElement('div');
+    const term = document.createElement('strong'); term.textContent = item.term;
+    const phonetic = document.createElement('span'); phonetic.textContent = item.phonetic || '';
+    const definition = document.createElement('small'); definition.textContent = vocabularyTranslation(item)[0]; definition.dir = 'auto';
+    const status = document.createElement('em'); status.textContent = item.reviewState || (item.removedFromDefault ? '待清理' : '学习中');
+    content.append(term, phonetic, definition); button.append(content, status);
+    return button;
+  }));
+  const active = state.vocabularyData.items.find((item) => item.id === state.activeWordId) || items[0] || state.vocabularyData.items[0];
+  renderVocabularyDetail(active);
+  const cleanupCount = vocabularyCleanupItems().length;
+  $('#cleanupCount').textContent = cleanupCount;
+  $('#cleanupOpen').disabled = cleanupCount === 0;
+  $('#cleanupBanner').classList.toggle('hidden', cleanupCount === 0 || localStorage.getItem('shy-cleanup-reminder-hidden') === 'true');
+  $('#cleanupBannerTitle').textContent = cleanupCount ? `有 ${cleanupCount} 个词已从默认生词本移除` : '没有待清理生词';
+  $('#cleanupBannerMeta').textContent = cleanupCount ? '它们仍保存在其他生词本中，需要检查吗？最多再提醒 2 次。' : '所有生词关系都已整理完成。';
+  $('#vocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · ${state.vocabularyData.source?.title || 'Mall Vocabulary In English'}`;
+  $('#navVocabularyCount').textContent = state.vocabularyData.items.length;
+  $('#reviewCount').textContent = state.vocabularyData.items.length;
+  if ($('#offlineVocabularySummary')) $('#offlineVocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · 关联主题 ${state.vocabularyData.source?.videoId || 'VFe7Ap1kfk0'}`;
+}
+
+async function loadVocabulary() {
+  let vocabulary = null;
+  if (state.authSession && window.shyBackend?.isConfigured()) {
+    try { vocabulary = await shyBackend.getVocabulary(); }
+    catch (error) { console.warn('NAS vocabulary unavailable; using local course vocabulary.', error.message); }
+  }
+  if (!vocabulary) {
+    try {
+      const response = await fetch('./data/vocabulary.json?v=19', { cache: 'no-cache' });
+      if (response.ok) vocabulary = await response.json();
+    } catch { /* Local cache below keeps the vocabulary usable offline. */ }
+  }
+  vocabulary ||= readStoredJSON(STORAGE_KEYS.vocabulary, null);
+  if (!vocabulary?.items?.length) return;
+  state.vocabularyData = vocabulary;
+  writeStoredJSON(STORAGE_KEYS.vocabulary, vocabulary);
+  renderVocabulary();
+}
+
+function openVocabularyCleanup() {
+  const cleanupItems = vocabularyCleanupItems();
+  if (!cleanupItems.length) { toast('当前没有待清理生词。'); return; }
+  showModal({
+    eyebrow: 'VOCABULARY CLEANUP', title: '检查待清理生词',
+    body: `<p>这些词已从默认生词本移除，但仍保存在其他生词本中。</p><label class="cleanup-select-all"><input id="cleanupSelectAll" type="checkbox" checked><strong>全选 / 全不选</strong><small id="cleanupSelectionCount">已选择 ${cleanupItems.length} / ${cleanupItems.length}</small></label><div class="cleanup-list">${cleanupItems.map((item) => `<label><input type="checkbox" data-cleanup-word="${escapeHTML(item.id)}" checked><span><strong>${escapeHTML(item.term)}</strong><small>仍在：${escapeHTML(item.books.map((book) => book.name).join('、'))}</small></span></label>`).join('')}</div>`,
+    actions: [{ label: '保留在其他生词本' }, { label: '从所有生词本删除', style: 'primary', onClick: async () => {
+      const selectedIds = $$('[data-cleanup-word]:checked', $('#appModal')).map((input) => input.dataset.cleanupWord);
+      if (!selectedIds.length) { toast('请至少选择一个生词。'); return false; }
+      if (!state.authSession) { toast('请先登录账号，再从所有生词本永久删除。'); return false; }
+      const result = await shyBackend.deleteVocabularyEverywhere(selectedIds);
+      const deleted = new Set(result.deletedIds || []);
+      state.vocabularyData.items = state.vocabularyData.items.filter((item) => !deleted.has(item.id));
+      writeStoredJSON(STORAGE_KEYS.vocabulary, state.vocabularyData);
+      renderVocabulary();
+      toast(`已从所有生词本删除 ${result.deletedCount || deleted.size} 个词。`);
+    } }],
+  });
+  const selectAll = $('#cleanupSelectAll');
+  const itemInputs = $$('[data-cleanup-word]', $('#appModal'));
+  const updateSelection = () => {
+    const count = itemInputs.filter((input) => input.checked).length;
+    selectAll.checked = count === itemInputs.length; selectAll.indeterminate = count > 0 && count < itemInputs.length;
+    $('#cleanupSelectionCount').textContent = `已选择 ${count} / ${itemInputs.length}`;
+  };
+  selectAll.addEventListener('change', () => { itemInputs.forEach((input) => { input.checked = selectAll.checked; }); updateSelection(); });
+  itemInputs.forEach((input) => input.addEventListener('change', updateSelection));
+}
+
+async function setupVocabulary() {
   $('#definitionLanguage').value = state.definitionLanguage;
   $('#definitionLanguage').addEventListener('change', (event) => updateDefinitions(event.target.value));
-  $$('.word-list-item').forEach((button) => button.addEventListener('click', () => {
-    $$('.word-list-item').forEach((item) => item.classList.remove('active'));
-    button.classList.add('active');
-    const id = button.dataset.wordId;
-    const entry = definitions[state.definitionLanguage][id];
-    $('#detailWord').textContent = id === 'build-confidence' ? 'build confidence' : id;
-    if (entry) { $('#primaryDefinition').textContent = entry[0]; $('#definitionText').textContent = entry[1]; }
-  }));
-  $('#vocabSearch').addEventListener('input', (event) => {
-    const q = event.target.value.trim().toLowerCase();
-    $$('.word-list-item').forEach((item) => item.hidden = !item.textContent.toLowerCase().includes(q));
+  $('#wordList').addEventListener('click', (event) => {
+    const button = event.target.closest('.word-list-item');
+    if (button) renderVocabularyDetail(state.vocabularyData?.items.find((item) => item.id === button.dataset.wordId));
   });
-  const openCleanup = () => showModal({
-    eyebrow: 'VOCABULARY CLEANUP', title: '检查待清理生词',
-    body: `<p>这些词已从默认生词本移除，但仍保存在其他生词本中。</p><div class="cleanup-list"><label><input type="checkbox" checked><span><strong>confidence</strong><small>仍在：商务英语、本周复习</small></span></label><label><input type="checkbox" checked><span><strong>pronunciation</strong><small>仍在：发音难点</small></span></label><label><input type="checkbox"><span><strong>approach</strong><small>仍在：面试英语</small></span></label></div>`,
-    actions: [{ label: '保留在其他生词本' }, { label: '从所有生词本删除', style: 'primary', onClick: () => toast('已从所有生词本移除所选词汇，可在操作记录中恢复。') }],
-  });
-  $('#cleanupOpen').addEventListener('click', openCleanup);
-  $('#reviewCleanup').addEventListener('click', openCleanup);
-  $('#dismissCleanup').addEventListener('click', () => { $('#cleanupBanner').remove(); toast('已关闭清理提醒，仍可从“待清理”手动进入。'); });
+  $('#vocabSearch').addEventListener('input', renderVocabulary);
+  $('#wordbookSelect').addEventListener('change', renderVocabulary);
+  $('#cleanupOpen').addEventListener('click', openVocabularyCleanup);
+  $('#reviewCleanup').addEventListener('click', openVocabularyCleanup);
+  $('#dismissCleanup').addEventListener('click', () => { localStorage.setItem('shy-cleanup-reminder-hidden', 'true'); $('#cleanupBanner').classList.add('hidden'); toast('已关闭清理提醒，仍可从“待清理”手动进入。'); });
   $$('.sound-btn').forEach((button) => button.addEventListener('click', () => {
-    if ('speechSynthesis' in window) { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance($('#detailWord').textContent)); }
+    if ('speechSynthesis' in window) { stopListeningSpeech(); speechSynthesis.speak(new SpeechSynthesisUtterance($('#detailWord').textContent)); }
     toast('正在播放美式发音。');
   }));
+  await loadVocabulary();
 }
 
 function renderAudioTime() {
   const mm = String(Math.floor(state.audioTime / 60)).padStart(2, '0');
   const ss = String(Math.floor(state.audioTime % 60)).padStart(2, '0');
   $('#audioCurrent').textContent = `${mm}:${ss}`;
-  $('#audioProgress').style.width = `${(state.audioTime / state.audioDuration) * 100}%`;
+  const durationMinutes = String(Math.floor(state.audioDuration / 60)).padStart(2, '0');
+  const durationSeconds = String(Math.floor(state.audioDuration % 60)).padStart(2, '0');
+  $('#audioDuration').textContent = `${durationMinutes}:${durationSeconds}`;
+  $('#audioProgress').style.width = `${Math.min(100, (state.audioTime / state.audioDuration) * 100)}%`;
+}
+
+function listeningPlaylist() { return LISTENING_PLAYLISTS[state.listeningPlaylistId] || LISTENING_PLAYLISTS['mall-all']; }
+
+function appendListeningText(target, track) {
+  let remaining = track.en;
+  const vocabulary = (state.vocabularyData?.items || []).filter((item) => track.words.includes(item.id)).sort((a, b) => b.term.length - a.term.length);
+  while (remaining) {
+    let match = null;
+    vocabulary.forEach((item) => {
+      const index = remaining.toLowerCase().indexOf(item.term.toLowerCase());
+      if (index >= 0 && (!match || index < match.index)) match = { item, index };
+    });
+    if (!match) { target.append(document.createTextNode(remaining)); break; }
+    if (match.index) target.append(document.createTextNode(remaining.slice(0, match.index)));
+    const mark = document.createElement('mark');
+    mark.className = 'vocab-mark'; mark.dataset.wordId = match.item.id;
+    mark.dataset.defaultBook = String(!match.item.removedFromDefault); mark.dataset.otherBooks = String(match.item.books?.filter((book) => book.id !== 'default').length || 0);
+    mark.textContent = remaining.slice(match.index, match.index + match.item.term.length); target.append(mark);
+    remaining = remaining.slice(match.index + match.item.term.length);
+  }
+}
+
+function renderListeningPlaylist() {
+  const playlist = listeningPlaylist();
+  if (state.listeningTrackIndex >= playlist.tracks.length) state.listeningTrackIndex = 0;
+  const track = playlist.tracks[state.listeningTrackIndex];
+  $('#listeningTrackTitle').textContent = playlist.title;
+  $('#listeningTrackMeta').textContent = `Mall Vocabulary In English · ${state.listeningTrackIndex + 1} / ${playlist.tracks.length}`;
+  $$('.playlist-item[data-playlist-id]').forEach((button) => button.classList.toggle('active', button.dataset.playlistId === state.listeningPlaylistId));
+  const lines = $('#listeningLines'); lines.replaceChildren();
+  playlist.tracks.forEach((item, index) => {
+    const line = document.createElement('div'); line.className = `listen-line${index === state.listeningTrackIndex ? ' active' : ''}`; line.dataset.index = index; line.dataset.en = item.en; line.dataset.zh = item.zh;
+    const english = document.createElement('strong'); appendListeningText(english, item);
+    const translated = document.createElement('small'); translated.textContent = item.zh;
+    if (index === state.listeningTrackIndex) { const current = document.createElement('em'); current.textContent = '当前句 · 测试语音'; line.append(english, translated, current); }
+    else line.append(english, translated);
+    lines.append(line);
+  });
+  const activeLanguage = $('#lyricsLanguage button.active')?.dataset.lang || 'bi';
+  $$('.listen-line').forEach((line) => { $('strong', line).style.display = activeLanguage === 'zh' ? 'none' : 'block'; $('small', line).style.display = activeLanguage === 'en' ? 'none' : 'block'; });
+  $$('.vocab-mark').forEach((mark) => mark.classList.toggle('no-highlight', !$('#highlightVocabulary').checked));
+  state.audioTime = 0; state.audioDuration = Math.max(2, track.en.split(/\s+/).length * .48); renderAudioTime();
+}
+
+function stopListeningSpeech(updateUi = true) {
+  state.listeningPlaybackToken += 1;
+  state.audioPlaying = false;
+  state.speechUtterance = null;
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (updateUi) {
+    $('#audioPlay').textContent = '▶';
+    $('.audio-player').classList.remove('playing');
+  }
+}
+
+function finishListeningTrack() {
+  if (!state.audioPlaying) return;
+  const playlist = listeningPlaylist();
+  if (state.playModeIndex === 2) { speakListeningTrack(); return; }
+  state.listeningTrackIndex = state.playModeIndex === 3 ? Math.floor(Math.random() * playlist.tracks.length) : (state.listeningTrackIndex + 1) % playlist.tracks.length;
+  renderListeningPlaylist(); speakListeningTrack();
+}
+
+function speakListeningTrack() {
+  const track = listeningPlaylist().tracks[state.listeningTrackIndex];
+  if (!track || !('speechSynthesis' in window)) { toast('当前浏览器不支持语音合成。'); return; }
+  const playbackToken = ++state.listeningPlaybackToken;
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(track.en); utterance.lang = 'en-US'; utterance.rate = [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex];
+  utterance.onend = () => { if (playbackToken === state.listeningPlaybackToken && state.speechUtterance === utterance) finishListeningTrack(); };
+  utterance.onerror = () => { if (playbackToken === state.listeningPlaybackToken) stopListeningSpeech(); };
+  state.audioPlaying = true; state.audioTime = 0; state.speechUtterance = utterance;
+  $('#audioPlay').textContent = 'Ⅱ'; $('.audio-player').classList.add('playing'); speechSynthesis.speak(utterance);
 }
 
 function setupListening() {
   setInterval(() => {
     if (!state.audioPlaying) return;
-    state.audioTime += 0.5 * [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex];
-    if (state.audioTime >= state.audioDuration) state.audioTime = 0;
+    state.audioTime = Math.min(state.audioDuration, state.audioTime + 0.5 * [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex]);
     renderAudioTime();
   }, 500);
-  $('#audioPlay').addEventListener('click', () => {
-    state.audioPlaying = !state.audioPlaying;
-    $('#audioPlay').textContent = state.audioPlaying ? 'Ⅱ' : '▶';
-    $('.audio-player').classList.toggle('playing', state.audioPlaying);
+  $$('.playlist-item[data-playlist-id]').forEach((button) => button.addEventListener('click', () => {
+    stopListeningSpeech();
+    state.listeningPlaylistId = button.dataset.playlistId; state.listeningTrackIndex = 0; renderListeningPlaylist();
+  }));
+  $('#listeningLines').addEventListener('click', (event) => {
+    const line = event.target.closest('.listen-line'); if (!line || event.target.closest('mark')) return;
+    state.listeningTrackIndex = Number(line.dataset.index || 0); const wasPlaying = state.audioPlaying; stopListeningSpeech(); renderListeningPlaylist(); if (wasPlaying) speakListeningTrack();
   });
+  $('#audioPlay').addEventListener('click', () => {
+    if (state.audioPlaying) stopListeningSpeech();
+    else speakListeningTrack();
+  });
+  const stepTrack = (delta) => { const playlist = listeningPlaylist(); state.listeningTrackIndex = (state.listeningTrackIndex + delta + playlist.tracks.length) % playlist.tracks.length; const wasPlaying = state.audioPlaying; stopListeningSpeech(); renderListeningPlaylist(); if (wasPlaying) speakListeningTrack(); };
+  $('#previousAudio').addEventListener('click', () => stepTrack(-1)); $('#nextAudio').addEventListener('click', () => stepTrack(1));
   const speeds = [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2];
   $('#speedButton').addEventListener('click', () => {
     state.speedIndex = (state.speedIndex + 1) % speeds.length;
     $('#speedButton').textContent = `${speeds[state.speedIndex]}×`;
+    if (state.audioPlaying) { stopListeningSpeech(false); speakListeningTrack(); }
     toast(`播放速度已设为 ${speeds[state.speedIndex]}×。`);
   });
   const modes = [['→', '顺序播放'], ['↻', '列表循环'], ['↺', '单曲循环'], ['⤨', '随机播放']];
@@ -1261,22 +1590,25 @@ function setupListening() {
     if (mark.dataset.defaultBook === 'false') { toast('这个词已经不在默认生词本中。'); return; }
     mark.dataset.defaultBook = 'false';
     state.vocabularyRemoved = true;
+    const vocabularyItem = state.vocabularyData?.items.find((item) => item.id === mark.dataset.wordId);
+    if (vocabularyItem) { vocabularyItem.removedFromDefault = true; vocabularyItem.books = vocabularyItem.books.filter((book) => book.id !== 'default'); writeStoredJSON(STORAGE_KEYS.vocabulary, state.vocabularyData); renderVocabulary(); }
     const otherCount = Number(mark.dataset.otherBooks || 0);
     if (otherCount > 0) mark.classList.add('other-only');
     else mark.classList.add('no-highlight');
     toast(`已将 “${mark.textContent}” 从默认生词本移除${otherCount ? `，仍保存在 ${otherCount} 个其他生词本中` : ''}。`, '撤销', () => {
       mark.dataset.defaultBook = 'true'; mark.classList.remove('other-only', 'no-highlight'); state.vocabularyRemoved = false;
+      if (vocabularyItem) { vocabularyItem.removedFromDefault = false; vocabularyItem.books.unshift({ id: 'default', name: '默认生词本' }); writeStoredJSON(STORAGE_KEYS.vocabulary, state.vocabularyData); renderVocabulary(); }
     });
   };
-  $$('.vocab-mark').forEach((mark) => {
-    mark.addEventListener('dblclick', (event) => { event.preventDefault(); removeFromDefault(mark); });
-    let lastTap = 0;
-    mark.addEventListener('pointerup', (event) => {
-      if (event.pointerType === 'mouse') return;
-      const now = Date.now();
-      if (now - lastTap < 350) { event.preventDefault(); removeFromDefault(mark); }
-      lastTap = now;
-    });
+  $('#listeningLines').addEventListener('dblclick', (event) => {
+    const mark = event.target.closest('.vocab-mark'); if (mark) { event.preventDefault(); removeFromDefault(mark); }
+  });
+  let lastVocabularyTap = { wordId: '', time: 0 };
+  $('#listeningLines').addEventListener('pointerup', (event) => {
+    const mark = event.target.closest('.vocab-mark'); if (!mark || event.pointerType === 'mouse') return;
+    const now = Date.now();
+    if (lastVocabularyTap.wordId === mark.dataset.wordId && now - lastVocabularyTap.time < 350) { event.preventDefault(); removeFromDefault(mark); }
+    lastVocabularyTap = { wordId: mark.dataset.wordId, time: now };
   });
   $('#timelineRange').addEventListener('input', (event) => {
     const value = Number(event.target.value) / 10;
@@ -1286,14 +1618,16 @@ function setupListening() {
   $('#restoreTimeline').addEventListener('click', () => { $('#timelineRange').value = 0; $('#timelineOffset').textContent = '0.0s'; toast('已恢复官方默认时间轴。'); });
   $('#newPlaylist').addEventListener('click', () => showModal({ eyebrow: 'NEW PLAYLIST', title: '新建磨耳朵列表', body: `<div class="modal-field"><label>列表名称</label><input value="新的听力列表"></div><div class="modal-field"><label>自动排序</label><select><option>自定义顺序</option><option>薄弱内容优先</option><option>很久未学习优先</option></select></div>`, actions: [{ label: '取消' }, { label: '创建列表', style: 'primary', onClick: () => toast('音频列表已创建。') }] }));
   $('#editPlaylist').addEventListener('click', () => toast('已进入列表编辑模式，可拖动音频调整顺序。'));
+  renderListeningPlaylist();
 }
 
 function setupDownloads() {
   const recordings = (analytics.data.events || []).filter((event) => event.type === 'recording');
   const recordingBytes = recordings.reduce((sum, event) => sum + Number(event.bytes || 0), 0);
-  $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
-  $('#recordingSize').textContent = formatBytes(recordingBytes);
-  $('#offlineVocabularySummary').textContent = `${$$('.word-list-item').length} 个词 · ${state.catalog?.topics?.length || 0} 个主题`;
+  if ($('#recordingSummary')) $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
+  if ($('#recordingSize')) $('#recordingSize').textContent = formatBytes(recordingBytes);
+  $('#offlinePlaylistSummary').textContent = `PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ · ${state.catalog?.topics?.length || 0} 个主题`;
+  if (state.vocabularyData) $('#offlineVocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · 关联主题 ${state.vocabularyData.source?.videoId || 'VFe7Ap1kfk0'}`;
   if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
     $('#storageUsed').textContent = `已使用 ${formatBytes(usage)}`;
     $('#storageAvailable').textContent = formatBytes(Math.max(0, quota - usage));
@@ -1346,9 +1680,9 @@ async function acceptAudioFile(file) {
 }
 
 async function generateSlidesWithAI(file) {
-  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = providers.openai; const apiKey = sessionStorage.getItem('shy-ai-key-openai');
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = providers.primary || providers.openai; const apiKey = sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
   if (!provider?.lastTestOk || !apiKey) throw new Error('请先在 AI 服务中完成真实连接测试；API Key 只保存在当前标签页。');
-  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.audioModel || 'whisper-1');
+  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.model);
   const transcriptionResponse = await fetch(providerEndpoint(provider.baseUrl, 'audio/transcriptions'), { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: transcriptionBody });
   if (!transcriptionResponse.ok) throw new Error(`音频转写失败：HTTP ${transcriptionResponse.status}`);
   const transcription = await transcriptionResponse.json(); const transcript = transcription.text || '';
@@ -1404,55 +1738,89 @@ function setupStudio() {
 
 function updateProviderCards() {
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
-  $$('.provider-card[data-provider]').forEach((card) => {
-    const provider = providers[card.dataset.provider];
-    const status = $('.provider-status', card);
-    if (!provider) { status.textContent = '● 待配置'; status.className = 'status warning provider-status'; return; }
-    status.textContent = provider.lastTestOk ? `● 已验证${provider.speechDetected ? ' · 语音' : ''}` : '● 已保存 · 待测试';
-    status.className = `status ${provider.lastTestOk ? 'success' : 'warning'} provider-status`;
+  const provider = providers.primary || providers.openai;
+  const card = $('.provider-card[data-provider="primary"]');
+  const status = $('.provider-status', card);
+  if (!provider) {
+    status.textContent = '● 待配置'; status.className = 'status warning provider-status';
+    $$('.active-model-name').forEach((node) => { node.textContent = '尚未配置'; });
+    $$('.capability-status').forEach((node) => { node.textContent = '待验证'; node.className = 'capability-status'; });
+    return;
+  }
+  const complete = provider.lastTestOk && provider.speechDetected && provider.translationDetected && provider.htmlPptDetected;
+  status.textContent = complete ? '● 三项能力已验证' : '● 已保存 · 待完整验证';
+  status.className = `status ${complete ? 'success' : 'warning'} provider-status`;
+  $('#primaryProviderName').textContent = provider.name || '统一 OpenAI-compatible 服务';
+  $('#primaryProviderMeta').textContent = `${provider.model || '未选择模型'} · 语音 · 翻译 · HTML PPT`;
+  $$('.active-model-name').forEach((node) => { node.textContent = provider.model || '尚未配置'; });
+  $$('.capability-status').forEach((node) => {
+    const verified = Boolean(provider[`${node.dataset.capability}Detected`]);
+    node.textContent = verified ? '✓ 已实测' : '待验证'; node.className = `capability-status${verified ? ' yes' : ''}`;
   });
 }
 
-async function testProviderConnection(providerId, config, apiKey) {
+function silentWavBlob() {
+  const sampleRate = 8000; const sampleCount = 2000; const buffer = new ArrayBuffer(44 + sampleCount * 2); const view = new DataView(buffer);
+  const write = (offset, value) => [...value].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
+  write(0, 'RIFF'); view.setUint32(4, 36 + sampleCount * 2, true); write(8, 'WAVE'); write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, sampleCount * 2, true);
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function testProviderConnection(config, apiKey) {
   let endpoint;
   try {
     const base = new URL(config.baseUrl);
     if (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error('API 地址必须使用 HTTPS。');
-    endpoint = providerId === 'openai' ? providerEndpoint(base.href, 'models') : base.href;
+    endpoint = providerEndpoint(base.href, 'models');
   } catch (error) { throw new Error(error.message || 'API 地址无效。'); }
+  if (!config.model) throw new Error('请填写需要同时承担三项能力的模型 ID。');
+  if (!apiKey) throw new Error('请填写 API Key；密钥只保存在当前标签页。');
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(endpoint, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: controller.signal });
+    const headers = { Authorization: `Bearer ${apiKey}` };
+    const response = await fetch(endpoint, { headers, signal: controller.signal });
     const text = await response.text();
     if (!response.ok) throw new Error(`连接失败：HTTP ${response.status}${text ? ` · ${text.slice(0, 90)}` : ''}`);
     let payload = null;
-    try { payload = JSON.parse(text); } catch { /* A successful health endpoint may return plain text. */ }
-    const modelNames = Array.isArray(payload?.data) ? payload.data.map((model) => model.id || '').join(' ') : '';
-    return { speechDetected: providerId === 'speech' || /audio|speech|whisper|transcrib|realtime/i.test(modelNames), modelCount: payload?.data?.length || 0 };
+    try { payload = JSON.parse(text); } catch { throw new Error('模型列表没有返回有效 JSON。'); }
+    const modelIds = Array.isArray(payload?.data) ? payload.data.map((model) => model.id || '') : [];
+    if (modelIds.length && !modelIds.includes(config.model)) throw new Error(`模型列表中没有找到 “${config.model}”。`);
+    const contentResponse = await fetch(providerEndpoint(config.baseUrl, 'chat/completions'), {
+      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ model: config.model, temperature: 0, messages: [{ role: 'user', content: 'Translate "shopping mall" into Simplified Chinese and create one valid HTML slide. Return only JSON: {"translation":"...","html":"<section>...</section>"}.' }] }),
+    });
+    if (!contentResponse.ok) throw new Error(`翻译与 HTML PPT 能力验证失败：HTTP ${contentResponse.status}`);
+    const contentPayload = await contentResponse.json(); const content = String(contentPayload?.choices?.[0]?.message?.content || '');
+    const translationDetected = /[\u3400-\u9fff]/.test(content); const htmlPptDetected = /<section[\s>]/i.test(content);
+    if (!translationDetected || !htmlPptDetected) throw new Error('模型已响应，但没有同时返回中文翻译和有效 HTML slide。');
+    const audioBody = new FormData(); audioBody.append('file', silentWavBlob(), 'capability-check.wav'); audioBody.append('model', config.model);
+    const audioResponse = await fetch(providerEndpoint(config.baseUrl, 'audio/transcriptions'), { method: 'POST', headers, body: audioBody, signal: controller.signal });
+    if (!audioResponse.ok) throw new Error(`同一模型的语音能力验证失败：HTTP ${audioResponse.status}`);
+    return { speechDetected: true, translationDetected, htmlPptDetected, modelCount: modelIds.length };
   } catch (error) {
     if (error.name === 'AbortError') throw new Error('连接超时，请检查 API 地址、网络或跨域配置。');
     throw error;
   } finally { clearTimeout(timeout); }
 }
 
-function openProviderModal(providerId = 'openai') {
+function openProviderModal() {
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
-  const stored = providers[providerId] || {};
-  const defaultUrl = providerId === 'openai' ? 'https://api.example.com/v1/' : 'https://speech.example.com/health';
+  const stored = providers.primary || providers.openai || {};
   showModal({
-    eyebrow: 'REAL API CONNECTION', title: providerId === 'speech' ? '配置语音评分服务' : '配置 OpenAI-compatible 服务',
-    body: `<div class="modal-field"><label for="providerBaseUrl">${providerId === 'speech' ? '评分 API URL（GET 健康检查 / POST 评分）' : 'API Base URL'}</label><input id="providerBaseUrl" inputmode="url" value="${escapeHTML(stored.baseUrl || defaultUrl)}"></div><div class="modal-field"><label for="providerModel">默认模型</label><input id="providerModel" value="${escapeHTML(stored.model || '')}" placeholder="例如 gpt-4.1-mini / pronunciation-v1"></div>${providerId === 'openai' ? `<div class="modal-field"><label for="providerAudioModel">音频转写模型</label><input id="providerAudioModel" value="${escapeHTML(stored.audioModel || 'whisper-1')}" placeholder="whisper-1"></div>` : ''}<div class="modal-field"><label for="providerApiKey">API Key（仅保存在当前标签页）</label><input id="providerApiKey" type="password" autocomplete="off" placeholder="不会写入本地持久存储"></div><div class="warning-box"><span>🔒</span><p><strong>这会发起真实网络请求</strong><br><small>${providerId === 'speech' ? 'POST 需接受 audio、reference_text，并返回 total、pronunciation、fluency、completeness。' : '浏览器直连需要厂商允许 CORS。生产环境建议通过受控后端代理保存密钥。'}</small></p></div>`,
+    eyebrow: 'UNIFIED AI CONNECTION', title: '配置统一 AI 服务',
+    body: `<div class="modal-field"><label for="providerName">配置名称</label><input id="providerName" value="${escapeHTML(stored.name || '统一 AI 服务')}"></div><div class="modal-field"><label for="providerBaseUrl">OpenAI-compatible API Base URL</label><input id="providerBaseUrl" inputmode="url" value="${escapeHTML(stored.baseUrl || 'https://api.example.com/v1/')}"></div><div class="modal-field"><label for="providerModel">统一模型 ID</label><input id="providerModel" value="${escapeHTML(stored.model || '')}" placeholder="必须同时支持 chat 与 audio/transcriptions"></div><div class="modal-field"><label for="providerApiKey">API Key（仅保存在当前标签页）</label><input id="providerApiKey" type="password" autocomplete="off" placeholder="不会写入本地持久存储"></div><div class="capability-checklist"><span>必须全部通过</span><strong>语音输入</strong><strong>内容翻译</strong><strong>HTML PPT</strong></div><div class="warning-box"><span>🔒</span><p><strong>将执行三次真实能力检查</strong><br><small>读取模型列表、生成中文翻译与 HTML slide，并向语音转写接口提交短静音 WAV。浏览器直连需要厂商允许 CORS。</small></p></div>`,
     actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
-      const config = { baseUrl: $('#providerBaseUrl').value.trim(), model: $('#providerModel').value.trim(), audioModel: $('#providerAudioModel')?.value.trim() || '', updatedAt: new Date().toISOString() };
+      const config = { name: $('#providerName').value.trim(), baseUrl: $('#providerBaseUrl').value.trim(), model: $('#providerModel').value.trim(), updatedAt: new Date().toISOString() };
       const apiKey = $('#providerApiKey').value.trim();
       if (!config.baseUrl) { toast('请填写 API 地址。'); return false; }
-      const result = await testProviderConnection(providerId, config, apiKey);
-      providers[providerId] = { ...config, ...result, lastTestOk: true, lastTestedAt: new Date().toISOString() };
+      const result = await testProviderConnection(config, apiKey);
+      providers.primary = { ...config, ...result, lastTestOk: true, lastTestedAt: new Date().toISOString() };
+      delete providers.openai; delete providers.speech;
       writeStoredJSON(STORAGE_KEYS.providers, providers);
-      if (apiKey) sessionStorage.setItem(`shy-ai-key-${providerId}`, apiKey);
+      sessionStorage.setItem('shy-ai-key-primary', apiKey);
       updateProviderCards();
-      toast(`真实连接测试通过${result.modelCount ? ` · 读取到 ${result.modelCount} 个模型` : ''}${result.speechDetected ? ' · 支持语音' : ''}。`);
+      toast(`统一模型三项能力验证通过${result.modelCount ? ` · 服务共返回 ${result.modelCount} 个模型` : ''}。`);
     } }],
   });
 }
@@ -1488,8 +1856,9 @@ function renderPromptLibrary() {
 
 function setupAI() {
   updateProviderCards();
-  $$('.test-model').forEach((button) => button.addEventListener('click', () => openProviderModal(button.closest('[data-provider]')?.dataset.provider || 'openai')));
-  $('#addProvider').addEventListener('click', () => openProviderModal('openai')); $('#configureProvider').addEventListener('click', () => openProviderModal('openai'));
+  $$('.test-model').forEach((button) => button.addEventListener('click', openProviderModal));
+  $('#configureProvider').addEventListener('click', openProviderModal);
+  $('#retestProvider').addEventListener('click', openProviderModal);
   renderPromptLibrary();
   $('#restorePrompt').addEventListener('click', () => {
     const fallback = DEFAULT_PROMPTS.find((prompt) => prompt.id === state.promptId) || DEFAULT_PROMPTS[0];
@@ -1523,9 +1892,23 @@ function applyProfileToForm(profile = storedProfile()) {
   $('#nicknameInput').value = profile.nickname || 'LinSpeak';
   $('#signatureInput').value = profile.signature || '';
   $('#signatureCount').textContent = [...(profile.signature || '')].length;
-  $('#profileAvatar').textContent = profile.avatar || 'LS';
+  state.pendingAvatar = profile.avatar || 'LS';
+  applyAvatarVisual($('#profileAvatar'), state.pendingAvatar);
   $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === (profile.avatar || 'LS')));
   updateProfileChrome(profile);
+}
+
+async function resizeAvatar(file) {
+  if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('请选择 PNG、JPEG 或 WebP 图片。');
+  if (file.size > 5 * 1024 * 1024) throw new Error('原始图片不能超过 5 MB。');
+  const bitmap = await createImageBitmap(file);
+  const size = 192; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
+  const context = canvas.getContext('2d'); const scale = Math.max(size / bitmap.width, size / bitmap.height);
+  const width = bitmap.width * scale; const height = bitmap.height * scale;
+  context.drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height); bitmap.close?.();
+  const value = canvas.toDataURL('image/webp', .82);
+  if (value.length > 250000) throw new Error('压缩后的头像仍然过大，请换一张图片。');
+  return value;
 }
 
 function friendlyAccountError(error) {
@@ -1567,6 +1950,7 @@ async function completeAuthenticatedSession(session) {
       writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile);
     }
   } catch (error) { setSyncMessage('学习记录已同步', `资料读取提示：${friendlyAccountError(error)}`, 'success'); }
+  await loadVocabulary();
   updateAccountUI();
 }
 
@@ -1688,8 +2072,19 @@ function setupSettings() {
   applyProfileToForm(storedProfile());
   $$('.avatar-options .avatar').forEach((button) => button.addEventListener('click', () => {
     $$('.avatar-options .avatar').forEach((item) => item.classList.remove('selected'));
-    button.classList.add('selected'); $('#profileAvatar').textContent = button.dataset.avatar;
+    button.classList.add('selected'); state.pendingAvatar = button.dataset.avatar; applyAvatarVisual($('#profileAvatar'), state.pendingAvatar);
   }));
+  const chooseAvatar = () => $('#avatarFileInput').click();
+  $('#uploadAvatar').addEventListener('click', chooseAvatar); $('#profileAvatar').addEventListener('click', chooseAvatar);
+  $('#avatarFileInput').addEventListener('change', async (event) => {
+    const file = event.target.files[0]; if (!file) return;
+    try {
+      state.pendingAvatar = await resizeAvatar(file); applyAvatarVisual($('#profileAvatar'), state.pendingAvatar);
+      $$('.avatar-options .avatar').forEach((item) => item.classList.remove('selected'));
+      toast('自定义头像已读取并压缩，点击“保存资料”后生效。');
+    } catch (error) { toast(error.message); }
+    finally { event.target.value = ''; }
+  });
   const reserved = ['admin', 'shy2speak', 'system', 'support', 'linspeak1'];
   let nicknameTimer;
   $('#nicknameInput').addEventListener('input', (event) => {
@@ -1709,7 +2104,7 @@ function setupSettings() {
   $('#saveProfile').addEventListener('click', async () => {
     const nickname = $('#nicknameInput').value.trim();
     if (nickname.length < 2 || reserved.includes(nickname.toLowerCase())) { toast('昵称格式不可用，请修改后再保存。'); return; }
-    const profile = { nickname, signature: $('#signatureInput').value.trim(), avatar: $('#profileAvatar').textContent, updatedAt: new Date().toISOString() };
+    const profile = { nickname, signature: $('#signatureInput').value.trim(), avatar: state.pendingAvatar || 'LS', updatedAt: new Date().toISOString() };
     try {
       if (state.authSession) await shyBackend.saveProfile({ ...profile, locale: state.language });
       writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile); scheduleCloudSync(50);
@@ -1749,12 +2144,13 @@ function setupPWA() {
 async function init() {
   applyAppearance();
   applyLanguage();
+  setupLanguageObserver();
   document.documentElement.classList.add('app-ready');
   const account = await shyBackend.initialize().catch((error) => ({ session: null, error }));
   state.authSession = account.session || null;
-  setupNavigation(); setupGlobalControls(); setupHoverToasts();
+  setupNavigation(); setupGlobalControls(); setupHoverToasts(); setupNotifications();
   await loadCatalog();
-  setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
+  setupCatalogControls(); setupPractice(); await setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();
   shyBackend.onAuthChange((session) => { state.authSession = session; updateAccountUI(); });
   if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('NAS 同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));

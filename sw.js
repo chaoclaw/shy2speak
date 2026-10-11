@@ -1,5 +1,5 @@
-const CACHE = 'shy2speak-app-v18';
-const APP_SHELL = ['./', './index.html', './styles.css?v=18', './runtime-config.js?v=18', './backend.js?v=18', './app.js?v=18', './data/catalog.json?v=18', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'shy2speak-app-v19';
+const APP_SHELL = ['./', './index.html', './boot.js?v=19', './styles.css?v=19', './runtime-config.js?v=19', './i18n.js?v=19', './backend.js?v=19', './app.js?v=19', './data/catalog.json?v=19', './data/vocabulary.json?v=19', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -21,6 +21,12 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE).then((cache) => cache.put(event.request, copy));
       return response;
     }).catch(() => caches.match(event.request)));
+    return;
+  }
+  if (event.request.mode === 'navigate' || /\/(?:boot|i18n|backend|app)\.js$|\/styles\.css$/.test(url.pathname)) {
+    event.respondWith(fetch(event.request).then((response) => {
+      const copy = response.clone(); caches.open(CACHE).then((cache) => cache.put(event.request, copy)); return response;
+    }).catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html'))));
     return;
   }
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {

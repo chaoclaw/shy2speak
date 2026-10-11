@@ -14,6 +14,7 @@ const scrypt = promisify(crypto.scrypt);
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(serverDirectory, '..');
 const catalogPath = path.join(publicDirectory, 'data', 'catalog.json');
+const vocabularyPath = path.join(publicDirectory, 'data', 'vocabulary.json');
 const PORT = Number(process.env.PORT || 8080);
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const AUTH_SECRET = process.env.AUTH_SECRET || '';
@@ -121,6 +122,18 @@ function validateNickname(nickname) {
   const value = String(nickname || '').trim();
   if ([...value].length < 2 || [...value].length > 24) throw new HttpError(400, '昵称长度需要为 2–24 个字符。', 'invalid_nickname');
   if (/^(admin|administrator|system|root|shy2speak)$/i.test(value)) throw new HttpError(400, '该昵称为保留名称。', 'reserved_nickname');
+  return value;
+}
+
+function validateAvatar(avatar) {
+  const value = String(avatar || 'S').trim();
+  if (/^data:image\/(?:png|jpeg|webp);base64,/i.test(value)) {
+    if (value.length > 250_000) throw new HttpError(413, '头像图片过大，请选择更小的图片。', 'avatar_too_large');
+    const encoded = value.slice(value.indexOf(',') + 1);
+    if (!/^[A-Za-z0-9+/]+=*$/.test(encoded)) throw new HttpError(400, '头像图片格式无效。', 'invalid_avatar');
+    return value;
+  }
+  if ([...value].length < 1 || [...value].length > 8) throw new HttpError(400, '默认头像内容无效。', 'invalid_avatar');
   return value;
 }
 
@@ -368,11 +381,72 @@ async function playlistCatalog() {
   };
 }
 
+let vocabularySeedCache;
+async function vocabularySeed() {
+  if (!vocabularySeedCache) {
+    const parsed = JSON.parse(await fs.readFile(vocabularyPath, 'utf8'));
+    if (!Array.isArray(parsed.items) || !parsed.source?.videoId) throw new Error('Vocabulary seed data is invalid');
+    vocabularySeedCache = parsed;
+  }
+  return vocabularySeedCache;
+}
+
+async function seedVocabularyForUser(client, userId) {
+  const seed = await vocabularySeed();
+  const claimed = await client.query(
+    `insert into user_content_seeds(user_id, content_type, version) values ($1, 'mall-vocabulary', $2)
+     on conflict (user_id, content_type) do nothing returning user_id`,
+    [userId, Number(seed.version || 1)],
+  );
+  if (!claimed.rowCount) return seed;
+  for (const item of seed.items) {
+    const payload = { ...item };
+    delete payload.books;
+    delete payload.removedFromDefault;
+    await client.query(
+      `insert into user_vocabulary_items(user_id, word_id, payload, removed_from_default)
+       values ($1, $2, $3, $4) on conflict (user_id, word_id) do nothing`,
+      [userId, item.id, JSON.stringify(payload), Boolean(item.removedFromDefault)],
+    );
+    for (const book of item.books || []) {
+      await client.query(
+        `insert into user_vocabulary_memberships(user_id, word_id, book_id, book_name)
+         values ($1, $2, $3, $4) on conflict do nothing`,
+        [userId, item.id, String(book.id).slice(0, 80), String(book.name).slice(0, 120)],
+      );
+    }
+  }
+  return seed;
+}
+
+async function vocabularyForUser(client, userId) {
+  const seed = await seedVocabularyForUser(client, userId);
+  const result = await client.query(
+    `select item.word_id, item.payload, item.removed_from_default,
+       coalesce(jsonb_agg(jsonb_build_object('id', membership.book_id, 'name', membership.book_name)
+         order by membership.created_at) filter (where membership.book_id is not null), '[]'::jsonb) as books
+     from user_vocabulary_items item
+     left join user_vocabulary_memberships membership
+       on membership.user_id = item.user_id and membership.word_id = item.word_id
+     where item.user_id = $1
+     group by item.user_id, item.word_id, item.payload, item.removed_from_default, item.created_at
+     order by item.created_at, item.word_id`,
+    [userId],
+  );
+  return {
+    version: seed.version,
+    source: seed.source,
+    wordbooks: seed.wordbooks,
+    items: result.rows.map((row) => ({ ...row.payload, id: row.word_id, removedFromDefault: row.removed_from_default, books: row.books })),
+  };
+}
+
 async function migrate() {
-  const sql = await fs.readFile(path.join(serverDirectory, 'migrations', '001_init.sql'), 'utf8');
+  const migrationDirectory = path.join(serverDirectory, 'migrations');
+  const migrationFiles = (await fs.readdir(migrationDirectory)).filter((file) => /^\d+_.+\.sql$/.test(file)).sort();
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     try {
-      await pool.query(sql);
+      for (const file of migrationFiles) await pool.query(await fs.readFile(path.join(migrationDirectory, file), 'utf8'));
       return;
     } catch (error) {
       if (attempt === 30) throw error;
@@ -587,7 +661,7 @@ app.post('/api/profile/nickname/check', authenticate, asyncRoute(async (request,
 app.put('/api/profile', authenticate, asyncRoute(async (request, response) => {
   const nickname = validateNickname(request.body?.nickname);
   const signature = String(request.body?.signature || '').slice(0, 160);
-  const avatar = String(request.body?.avatar || 'S').slice(0, 32);
+  const avatar = validateAvatar(request.body?.avatar);
   const locale = String(request.body?.locale || 'zh').slice(0, 20);
   try {
     const result = await pool.query(
@@ -643,13 +717,40 @@ app.put('/api/learning-state', authenticate, asyncRoute(async (request, response
   } finally { client.release(); }
 }));
 
+app.get('/api/vocabulary', authenticate, asyncRoute(async (request, response) => {
+  const client = await pool.connect();
+  try {
+    await client.query('begin');
+    const vocabulary = await vocabularyForUser(client, request.auth.sub);
+    await client.query('commit');
+    response.json(vocabulary);
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally { client.release(); }
+}));
+
+app.post('/api/vocabulary/delete-everywhere', authenticate, asyncRoute(async (request, response) => {
+  const wordIds = [...new Set((Array.isArray(request.body?.word_ids) ? request.body.word_ids : []).map((id) => String(id)))];
+  if (!wordIds.length || wordIds.length > 100 || wordIds.some((id) => !/^[a-z0-9-]{1,80}$/.test(id))) {
+    throw new HttpError(400, '请选择有效的待清理生词。', 'invalid_vocabulary_selection');
+  }
+  const result = await pool.query(
+    `delete from user_vocabulary_items where user_id = $1 and word_id = any($2::text[])
+     returning word_id`,
+    [request.auth.sub, wordIds],
+  );
+  const deletedIds = result.rows.map((row) => row.word_id);
+  response.json({ deletedIds, deletedCount: deletedIds.length });
+}));
+
 app.get('/runtime-config.js', (_request, response) => {
   response.type('application/javascript').set('Cache-Control', 'no-store').send(`window.__SHY2SPEAK_CONFIG__ = Object.freeze(${JSON.stringify({ apiBase: '/api', deployment: 'self-hosted' })});\n`);
 });
 const staticOptions = { etag: true, maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 };
 app.use('/data', express.static(path.join(publicDirectory, 'data'), staticOptions));
 app.use('/icons', express.static(path.join(publicDirectory, 'icons'), staticOptions));
-for (const file of ['app.js', 'backend.js', 'styles.css', 'sw.js', 'manifest.webmanifest']) {
+for (const file of ['boot.js', 'i18n.js', 'app.js', 'backend.js', 'styles.css', 'sw.js', 'manifest.webmanifest']) {
   app.get(`/${file}`, (_request, response) => response.sendFile(path.join(publicDirectory, file), staticOptions));
 }
 app.get(['/', '/index.html'], (_request, response) => response.sendFile(path.join(publicDirectory, 'index.html')));

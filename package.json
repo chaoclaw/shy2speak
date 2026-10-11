@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "check": "node --check app.js && node --check backend.js && node --check server/index.js && node --check server/youtube-catalog.js && node --check server/youtube-playlist.js",
+    "check": "node --check boot.js && node --check i18n.js && node --check app.js && node --check backend.js && node --check server/index.js && node --check server/youtube-catalog.js && node --check server/youtube-playlist.js",
     "test": "node tests/data-contract.cjs && node tests/backend-contract.cjs && node tests/youtube-catalog.mjs && node tests/youtube-playlist.mjs && node tests/ui-smoke.cjs",
     "test:api": "node tests/api-integration.mjs"
   },

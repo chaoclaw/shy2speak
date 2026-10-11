@@ -11,7 +11,7 @@ WORKDIR /app
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json ./
 COPY --chown=node:node server ./server
-COPY --chown=node:node index.html app.js backend.js styles.css runtime-config.js sw.js manifest.webmanifest ./
+COPY --chown=node:node index.html boot.js i18n.js app.js backend.js styles.css runtime-config.js sw.js manifest.webmanifest ./
 COPY --chown=node:node data ./data
 COPY --chown=node:node icons ./icons
 USER node

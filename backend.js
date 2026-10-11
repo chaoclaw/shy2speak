@@ -191,6 +191,16 @@
     return request('/learning-state', { accessToken: active.access_token });
   }
 
+  async function getVocabulary() {
+    const active = await ensureSession();
+    return request('/vocabulary', { accessToken: active.access_token });
+  }
+
+  async function deleteVocabularyEverywhere(wordIds) {
+    const active = await ensureSession();
+    return request('/vocabulary/delete-everywhere', { method: 'POST', accessToken: active.access_token, body: { word_ids: wordIds } });
+  }
+
   async function initialize() {
     if (session && Number(session.expires_at || 0) <= Math.floor(Date.now() / 1000) + 60) {
       try { await refreshSession(); }
@@ -208,6 +218,6 @@
     onAuthChange(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     signInPassword, signUp, sendOtp, verifyOtp, recoverPassword, resetPasswordWithCode,
     updatePassword, refreshSession, signOut, getUser, getProfile, saveProfile,
-    checkNickname, pushLearningState, pullLearningState,
+    checkNickname, pushLearningState, pullLearningState, getVocabulary, deleteVocabularyEverywhere,
   });
 })();

@@ -7,6 +7,7 @@ const path = require('node:path');
 const port = 4174;
 const origin = `http://127.0.0.1:${port}`;
 const catalogFixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'catalog.json'), 'utf8'));
+const vocabularyFixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'vocabulary.json'), 'utf8'));
 catalogFixture.topics[0].transcriptOrigin = 'youtube-public-captions';
 catalogFixture.topics[0].chapters = [
   {
@@ -44,6 +45,8 @@ const cloudState = {
 };
 const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: __dirname + '/..', stdio: 'ignore' });
 let browser;
+let vocabularyDeleteCalls = 0;
+let savedProfile = null;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -66,6 +69,15 @@ async function main() {
     if (url === `${origin}/api/learning-state`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ syncedAt: '2099-10-11T00:00:00Z', snapshotCount: 1 }) });
     if (url === `${origin}/api/profile/nickname/check`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ available: true }) });
     if (url === `${origin}/api/profile` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001', nickname: 'NasLearner', signature: 'Synced profile', avatar: '🚀', locale: 'zh', updated_at: '2026-10-11T00:00:00Z' }) });
+    if (url === `${origin}/api/profile` && route.request().method() === 'PUT') { savedProfile = route.request().postDataJSON(); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001', ...savedProfile, updated_at: '2026-10-11T00:00:00Z' }) }); }
+    if (url === `${origin}/api/vocabulary` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(vocabularyFixture) });
+    if (url === `${origin}/api/vocabulary/delete-everywhere`) {
+      vocabularyDeleteCalls += 1;
+      const selected = new Set(route.request().postDataJSON().word_ids);
+      const deletedIds = vocabularyFixture.items.filter((item) => selected.has(item.id)).map((item) => item.id);
+      vocabularyFixture.items = vocabularyFixture.items.filter((item) => !selected.has(item.id));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deletedIds, deletedCount: deletedIds.length }) });
+    }
     return route.continue();
   });
 
@@ -91,6 +103,17 @@ async function main() {
   await page.locator('#languageToggle').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === 'Switch interface language to Chinese');
   assert.equal(await page.locator('#languageToggle').getAttribute('aria-label'), 'Switch interface language to Chinese', 'top-right language guidance should follow the interface language');
+  const englishHeadings = { overview: 'Welcome back', vocabulary: 'My vocabulary', listening: 'Listening', downloads: 'Offline content', studio: 'Audio and HTML PPT', ai: 'Unified AI configuration and scoring prompts', settings: 'Settings' };
+  for (const [view, heading] of Object.entries(englishHeadings)) {
+    await page.evaluate((next) => window.navigate(next), view);
+    await page.waitForFunction(({ id, text }) => document.querySelector(`#view-${id} .page-heading h1, #view-${id} .welcome-card h1`)?.textContent.includes(text), { id: view, text: heading });
+  }
+  const englishChromeSelectors = ['#goalMessage', '#streakStatus', '#learningInsight', '#vocabularySummary', '#cleanupBannerTitle', '#cleanupBannerMeta', '#detailBookStatus', '#detailMediaMeta', '#storageUsed', '#storageBreakdown', '#offlineVocabularySummary', '#accountAction', '#storageSummary', '#promptTabs'];
+  for (const selector of englishChromeSelectors) {
+    const value = await page.locator(selector).textContent();
+    assert.equal(/[\u3400-\u9fff]/.test(value), false, `${selector} should translate dynamic interface text to English`);
+  }
+  await page.evaluate(() => window.navigate('practice'));
   await page.evaluate(() => localStorage.setItem('shy-language', 'zh'));
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
@@ -141,10 +164,45 @@ async function main() {
   assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest', 'newer cloud preferences should hydrate locally');
 
+  await page.evaluate(() => window.navigate('vocabulary'));
+  await page.waitForFunction(() => document.querySelector('#wordList')?.textContent.includes('shopping mall'));
+  assert.equal(await page.locator('.word-list-item').count(), 5, 'topic-linked Mall Vocabulary seed words should render');
+  await page.click('#cleanupOpen');
+  assert.equal(await page.locator('[data-cleanup-word]').count(), 3, 'three removed words should be pending cleanup');
+  assert.equal(await page.locator('[data-cleanup-word]:checked').count(), 3, 'cleanup words should all be selected by default');
+  await page.locator('#cleanupSelectAll').uncheck();
+  assert.equal(await page.locator('[data-cleanup-word]:checked').count(), 0, 'select-all control should clear the full selection');
+  await page.locator('#cleanupSelectAll').check();
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
+  assert.equal(vocabularyDeleteCalls, 1, 'cleanup must call the authenticated delete-everywhere API');
+  assert.equal(await page.locator('.word-list-item').count(), 2, 'deleted words should leave every visible wordbook immediately');
+
+  await page.evaluate(() => window.navigate('listening'));
+  await page.click('[data-playlist-id="checkout"]');
+  assert.equal(await page.locator('#listeningTrackTitle').textContent(), '结账场景', 'listening playlists should switch to real course test data');
+  assert.equal(await page.locator('#listeningLines .listen-line').count(), 2, 'selected listening playlist should render its real sentence queue');
+  await page.click('#nextAudio');
+  assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('2 / 2'), 'listening next-track control should work');
+
+  await page.click('#notificationButton');
+  assert.ok((await page.locator('#modalTitle').textContent()).includes('通知'), 'notification button should open the notification center');
+  await page.locator('#modalActions .primary-btn').click();
+  assert.ok(await page.locator('#notificationDot').evaluate((node) => node.classList.contains('hidden')), 'opening notifications should clear the unread dot');
+
+  await page.evaluate(() => window.navigate('settings'));
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  await page.locator('#avatarFileInput').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: png });
+  await page.waitForFunction(() => document.querySelector('#profileAvatar').style.backgroundImage.includes('data:image/webp'));
+  await page.click('#saveProfile');
+  await page.waitForFunction(() => document.querySelector('#toastContainer')?.textContent.includes('个人资料已保存'));
+  assert.ok(savedProfile?.avatar?.startsWith('data:image/webp;base64,'), 'custom avatar should be compressed and sent through the profile API');
+
   await page.evaluate(() => window.navigate('ai'));
-  assert.ok((await page.locator('[data-provider="openai"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
-  await page.locator('[data-provider="openai"] .test-model').click();
-  assert.ok((await page.locator('#modalTitle').textContent()).includes('OpenAI'), 'real provider configuration dialog should open');
+  assert.equal(await page.locator('.provider-card[data-provider]').count(), 1, 'AI services should use one unified configuration');
+  assert.ok((await page.locator('[data-provider="primary"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
+  await page.locator('[data-provider="primary"] .test-model').click();
+  assert.ok((await page.locator('#modalTitle').textContent()).includes('统一 AI'), 'real unified provider configuration dialog should open');
   await page.locator('#appModal').evaluate((dialog) => dialog.close());
 
   await page.setViewportSize({ width: 390, height: 844 });
