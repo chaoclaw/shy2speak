@@ -15,6 +15,10 @@ for (const topic of catalog.topics) {
   topicIds.add(topic.id);
   assert.match(topic.videoId, /^[\w-]{11}$/, `invalid YouTube id: ${topic.videoId}`);
   assert.ok(topic.chapters.length > 0, `${topic.id} must contain a chapter`);
+  if (topic.transcriptOrigin?.startsWith('youtube-')) {
+    assert.match(topic.captionLanguage || '', /^en(?:-|$)/i, `${topic.id} must use an English caption track`);
+    assert.ok(!Number.isNaN(Date.parse(topic.captionSyncedAt)), `${topic.id} must record caption sync time`);
+  }
   const chapterIds = new Set();
   for (const chapter of topic.chapters) {
     assert.ok(!chapterIds.has(chapter.id), `duplicate chapter id: ${chapter.id}`);

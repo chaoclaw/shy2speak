@@ -10,6 +10,7 @@
 | UI-02 | Mobile 打开 Practice | 本章内容、预习、视频、逐句跟读依次排列；视频与英文上下相邻 | `tests/ui-smoke.cjs` |
 | DATA-01 | 加载课程目录 | 播放列表、主题、章节、句子符合数据契约，ID 与时间段不重复 | `tests/data-contract.cjs` |
 | DATA-02 | 加载 YouTube | 用户点击播放后挂载官方隐私增强播放器；运行时元数据可更新标题与频道 | `tests/ui-smoke.cjs`（网络夹具） |
+| DATA-03 | 同步实际逐句字幕 | 部署读取公开视频英文字幕轨，优先人工字幕，其次自动字幕；按自然停顿生成不重叠句子并归入实际公开视频章节；失败时阻止发布示例稿 | `scripts/sync_youtube_captions.py --self-test` + Pages 构建 |
 | NAV-01 | 切换所有主页面 | 8 个页面均能激活，URL 与导航状态一致 | `tests/ui-smoke.cjs` |
 | AUTH-01 | 选择手机号登录 | 邮箱与手机号先选方式，手机号使用独立 `tel` 输入 | `tests/ui-smoke.cjs` |
 | AUTH-02 | 连接账号服务 | 填入 Supabase URL 与 Publishable Key 后执行真实健康检查；不再要求重复选择后端 | `tests/ui-smoke.cjs`（网络夹具） |

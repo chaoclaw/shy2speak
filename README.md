@@ -27,6 +27,7 @@ Alternatively, enter the same Project URL and publishable key from Settings → 
 
 - `data/catalog.json` contains the versioned course contract and the initial YouTube playlist/video IDs.
 - Video playback uses the official `youtube-nocookie.com` embed. Runtime title/channel metadata is read from YouTube oEmbed when the user loads a video.
+- Every Pages deployment runs `scripts/sync_youtube_captions.py`: it reads public YouTube caption tracks without downloading media, prefers creator-provided English captions, falls back to YouTube automatic English captions, and rebuilds chapters/sentence timestamps. Deployment fails instead of presenting sample copy as an accurate transcript when no public English track can be read.
 - Practice time, attempts, recordings, prompt templates, settings and custom video topics persist in browser storage and sync after account login.
 - Microphone recording uses the browser `MediaRecorder` API and reports the real device, duration and byte size. A configured speech endpoint receives a real multipart POST and must return `total`, `pronunciation`, `fluency` and `completeness` before the score is stored.
 - AI tests issue real requests to the configured endpoint. API keys only live in `sessionStorage`; a production deployment should proxy secrets through a backend.
@@ -39,6 +40,7 @@ Alternatively, enter the same Project URL and publishable key from Settings → 
 ```bash
 node --check app.js
 node --check backend.js
+python3 scripts/sync_youtube_captions.py --self-test
 node tests/data-contract.cjs
 node tests/backend-contract.cjs
 node tests/ui-smoke.cjs

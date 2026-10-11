@@ -248,6 +248,14 @@ function currentSentence() {
   return currentChapter()?.sentences?.find((sentence) => sentence.id === state.sentenceId) || currentChapter()?.sentences?.[0] || null;
 }
 
+function captionStatus(topic) {
+  const origin = topic?.transcriptOrigin || 'pending';
+  if (origin === 'youtube-manual-captions' || origin === 'official-captions') return { label: 'YouTube 人工字幕', detail: '公开视频字幕', verified: true };
+  if (origin === 'youtube-auto-captions') return { label: 'YouTube 自动字幕', detail: '自动字幕 · 已同步时间轴', verified: true };
+  if (origin === 'curated-sample') return { label: '练习稿 · 待核对', detail: '练习稿待核对', verified: false };
+  return { label: '字幕待同步', detail: '字幕待同步', verified: false };
+}
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.round(seconds || 0));
   const minutes = Math.floor(total / 60);
@@ -313,7 +321,7 @@ function renderAnalyticsOverview() {
     const completed = topic.chapters.filter((chapter) => analytics.ensure('chapters', `${topic.id}:${chapter.id}`).practiceCount > 0).length;
     const progress = topic.chapters.length ? Math.round((completed / topic.chapters.length) * 100) : 0;
     $('#overviewTopicTitle').textContent = topic.title;
-    $('#overviewTopicMeta').textContent = `${topic.channelTitle || 'YouTube'} · ${topic.transcriptOrigin === 'official-captions' ? '官方字幕' : '练习稿待核对'}`;
+    $('#overviewTopicMeta').textContent = `${topic.channelTitle || 'YouTube'} · ${captionStatus(topic).detail}`;
     $('#overviewTopicProgress').style.width = `${progress}%`; $('#overviewTopicProgressLabel').textContent = `${progress}%`;
   }
 }
@@ -407,7 +415,7 @@ function createFallbackChapter() {
 
 async function loadCatalog() {
   try {
-    const response = await fetch('./data/catalog.json?v=13', { cache: 'no-cache' });
+    const response = await fetch('./data/catalog.json?v=14', { cache: 'no-cache' });
     if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
     const catalog = await response.json();
     if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
@@ -518,8 +526,9 @@ function renderPracticeTopic() {
   const preview = $('.preview-card p');
   preview.textContent = chapter?.previewWords?.length ? `${chapter.previewWords.length} 个重点词 · 自动标记 · 约 3 分钟` : '预习词汇将在字幕同步后生成';
   renderPracticeSentences(chapter);
-  $('#transcriptStatus').textContent = topic.transcriptOrigin === 'official-captions' ? '官方字幕' : '练习稿 · 待核对';
-  $('#transcriptStatus').className = `status transcript-status ${topic.transcriptOrigin === 'official-captions' ? 'success' : 'warning'}`;
+  const caption = captionStatus(topic);
+  $('#transcriptStatus').textContent = caption.label;
+  $('#transcriptStatus').className = `status transcript-status ${caption.verified ? 'success' : 'warning'}`;
   renderAnalyticsOverview();
 }
 
