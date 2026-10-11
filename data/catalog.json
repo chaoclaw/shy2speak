@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-11T00:00:00Z",
+  "source": {
+    "provider": "youtube",
+    "playlistId": "PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
+    "playlistUrl": "https://www.youtube.com/playlist?list=PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
+    "copyrightNotice": "视频版权归原作者及 YouTube 内容发布者所有。Shy2Speak 仅通过官方嵌入播放器播放，不下载或重新分发受版权保护的视频。"
+  },
+  "topics": [
+    {
+      "id": "youtube-vfe7ap1kfk0",
+      "provider": "youtube",
+      "videoId": "VFe7Ap1kfk0",
+      "playlistId": "PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
+      "sourceUrl": "https://www.youtube.com/watch?v=VFe7Ap1kfk0&list=PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
+      "title": "YouTube 英语口语练习",
+      "channelTitle": "等待 YouTube 元数据",
+      "thumbnail": "https://i.ytimg.com/vi/VFe7Ap1kfk0/hqdefault.jpg",
+      "metadataStatus": "runtime-oembed",
+      "transcriptOrigin": "curated-sample",
+      "chapters": [
+        {
+          "id": "chapter-01",
+          "index": 1,
+          "title": "Conversation warm-up",
+          "titleZh": "对话热身",
+          "start": 0,
+          "durationLabel": "练习稿",
+          "previewWords": ["confidence", "nervous", "practice", "conversation", "appreciate"],
+          "sentences": [
+            {"id": "sentence-01", "start": 0, "end": 4.2, "en": "Hi, nice to meet you.", "zh": "你好，很高兴认识你。", "words": []},
+            {"id": "sentence-02", "start": 4.2, "end": 9.4, "en": "I'm a little nervous, but that's normal.", "zh": "我有点紧张，但这很正常。", "words": ["nervous"]},
+            {"id": "sentence-03", "start": 9.4, "end": 16.8, "en": "The best way to build confidence is to practice a little every day.", "zh": "建立自信最好的方法就是每天练习一点。", "words": ["confidence", "practice"]},
+            {"id": "sentence-04", "start": 16.8, "end": 22.5, "en": "Start with simple questions like “How's your day?”.", "zh": "从简单的问题开始，比如“你今天过得怎么样？”。", "words": ["conversation"]},
+            {"id": "sentence-05", "start": 22.5, "end": 29.1, "en": "People usually appreciate a friendly and open tone.", "zh": "人们通常会欣赏友好和开放的态度。", "words": ["appreciate"]}
+          ]
+        },
+        {
+          "id": "chapter-02",
+          "index": 2,
+          "title": "Build speaking confidence",
+          "titleZh": "建立开口自信",
+          "start": 29.1,
+          "durationLabel": "待同步",
+          "previewWords": ["approach", "comfortable", "response"],
+          "sentences": []
+        }
+      ]
+    }
+  ]
+}

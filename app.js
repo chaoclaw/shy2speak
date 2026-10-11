@@ -14,7 +14,184 @@ const state = {
   definitionLanguage: localStorage.getItem('shy-definition-language') || 'zh',
   vocabularyRemoved: false,
   cleanupReminder: 1,
+  catalog: null,
+  topicId: localStorage.getItem('shy-topic-id') || '',
+  chapterId: localStorage.getItem('shy-chapter-id') || '',
+  sentenceId: '',
+  mediaRecorder: null,
+  mediaStream: null,
+  recordingStartedAt: 0,
+  recordingChunks: [],
+  promptId: localStorage.getItem('shy-prompt-id') || 'encouraging',
+  studioSource: null,
+  reduceMotion: localStorage.getItem('shy-reduce-motion') === 'true',
+  highContrast: localStorage.getItem('shy-high-contrast') === 'true',
 };
+
+const STORAGE_KEYS = {
+  analytics: 'shy-learning-analytics-v1',
+  customTopics: 'shy-custom-topics-v1',
+  youtubeMetadata: 'shy-youtube-metadata-v1',
+  providers: 'shy-ai-providers-v1',
+  prompts: 'shy-ai-prompts-v1',
+  profile: 'shy-profile-v1',
+};
+
+const DEFAULT_PROMPTS = [
+  { id: 'encouraging', name: '鼓励型反馈', system: '你是一位耐心、准确的英语发音教练。根据语音服务返回的逐词与音素分数，为学习者提供简洁、可执行的反馈。不要修改原始分数。', isDefault: true },
+  { id: 'strict', name: '严格评分', system: '你是一位严格的英语发音评测员。只基于提供的发音、流利度与完整度数据给出反馈，并明确指出需要重练的音素。', isDefault: true },
+  { id: 'children', name: '儿童学习', system: '你是一位友善的少儿英语老师。使用积极、简短且容易理解的语言反馈发音问题，每次只给一个改进建议。', isDefault: true },
+  { id: 'business', name: '商务英语', system: '你是一位商务英语表达教练。结合语音评分说明清晰度、语气与专业表达，并给出一句可立即模仿的建议。', isDefault: true }
+];
+
+function readStoredJSON(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+  catch { return fallback; }
+}
+
+function writeStoredJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function escapeHTML(value = '') {
+  return String(value).replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
+}
+
+const analytics = {
+  data: readStoredJSON(STORAGE_KEYS.analytics, { version: 1, views: {}, topics: {}, chapters: {}, sentences: {}, events: [] }),
+  active: {},
+  ensure(bucket, id) {
+    this.data[bucket] ||= {};
+    this.data[bucket][id] ||= { practiceSeconds: 0, practiceCount: 0, recordings: 0, scores: [], lastPracticedAt: null };
+    return this.data[bucket][id];
+  },
+  begin(bucket, id, count = false) {
+    if (!id) return;
+    this.end(bucket);
+    const item = this.ensure(bucket, id);
+    if (count) item.practiceCount += 1;
+    item.lastPracticedAt = new Date().toISOString();
+    this.active[bucket] = { id, startedAt: performance.now() };
+    this.save();
+  },
+  end(bucket) {
+    const active = this.active[bucket];
+    if (!active) return;
+    const seconds = Math.max(0, Math.round((performance.now() - active.startedAt) / 1000));
+    this.ensure(bucket, active.id).practiceSeconds += seconds;
+    const dayKey = new Date().toISOString().slice(0, 10);
+    this.data.days ||= {};
+    this.data.days[dayKey] ||= {};
+    this.data.days[dayKey][bucket] ||= {};
+    this.data.days[dayKey][bucket][active.id] = Number(this.data.days[dayKey][bucket][active.id] || 0) + seconds;
+    delete this.active[bucket];
+    this.save();
+  },
+  increment(bucket, id, field = 'practiceCount') {
+    const item = this.ensure(bucket, id);
+    item[field] = Number(item[field] || 0) + 1;
+    item.lastPracticedAt = new Date().toISOString();
+    this.event(field, { bucket, id });
+    this.save();
+  },
+  addScore(bucket, id, score) {
+    const item = this.ensure(bucket, id);
+    item.scores.push({ ...score, createdAt: new Date().toISOString() });
+    item.scores = item.scores.slice(-30);
+    this.event('score', { bucket, id, total: score.total });
+    this.save();
+  },
+  event(type, payload = {}) {
+    this.data.events ||= [];
+    this.data.events.push({ type, ...payload, at: new Date().toISOString() });
+    this.data.events = this.data.events.slice(-300);
+  },
+  save() { writeStoredJSON(STORAGE_KEYS.analytics, this.data); },
+  flush() { Object.keys(this.active).forEach((bucket) => this.end(bucket)); },
+};
+
+function currentTopic() {
+  return state.catalog?.topics?.find((topic) => topic.id === state.topicId) || state.catalog?.topics?.[0] || null;
+}
+
+function currentChapter() {
+  const topic = currentTopic();
+  return topic?.chapters?.find((chapter) => chapter.id === state.chapterId) || topic?.chapters?.[0] || null;
+}
+
+function currentSentence() {
+  return currentChapter()?.sentences?.find((sentence) => sentence.id === state.sentenceId) || currentChapter()?.sentences?.[0] || null;
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(seconds || 0));
+  const minutes = Math.floor(total / 60);
+  return `${minutes}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  return `${Math.round(value / 1024)} KB`;
+}
+
+function renderAnalyticsOverview() {
+  if (!$('#metricPracticeMinutes')) return;
+  const practiceSeconds = analytics.data.views?.practice?.practiceSeconds || 0;
+  const listeningSeconds = analytics.data.views?.listening?.practiceSeconds || 0;
+  const sentenceStats = Object.values(analytics.data.sentences || {});
+  const scores = sentenceStats.flatMap((item) => item.scores || []).map((score) => Number(score.total)).filter(Number.isFinite);
+  const practiceCount = sentenceStats.reduce((sum, item) => sum + Number(item.practiceCount || 0), 0);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayViews = analytics.data.days?.[todayKey]?.views || {};
+  const todaySeconds = Object.values(todayViews).reduce((sum, seconds) => sum + Number(seconds || 0), 0);
+  const todayMinutes = Math.round(todaySeconds / 60);
+  $('#metricPracticeMinutes').textContent = Math.round(practiceSeconds / 60);
+  $('#metricListeningMinutes').textContent = Math.round(listeningSeconds / 60);
+  $('#metricPracticeCount').textContent = `${practiceCount} 次逐句练习`;
+  $('#metricAverageScore').textContent = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : '—';
+  $('#metricScoreCount').textContent = scores.length ? `${scores.length} 次真实评分` : '尚无 AI 评分';
+  const vocabularyCount = $$('.word-list-item').length;
+  $('#metricVocabularyCount').textContent = vocabularyCount;
+  $('#navVocabularyCount').textContent = vocabularyCount;
+  $('#reviewCount').textContent = vocabularyCount;
+  if ($('#vocabularySummary')) $('#vocabularySummary').textContent = `${vocabularyCount} 个词 · 今天待复习 ${vocabularyCount} 个`;
+  $('#todayMinutes').textContent = todayMinutes;
+  $('#goalRing').style.setProperty('--progress', Math.min(100, Math.round((todayMinutes / 30) * 100)));
+  $('#goalMessage').textContent = todayMinutes >= 30 ? '今天的目标已完成' : `今天再练 ${Math.max(1, 30 - todayMinutes)} 分钟`;
+  const activeDays = Object.entries(analytics.data.days || {}).filter(([, buckets]) => Object.values(buckets.views || {}).some((seconds) => seconds > 0)).map(([day]) => day).sort().reverse();
+  $('#streakStatus').textContent = activeDays.length ? `● 已记录 ${activeDays.length} 个学习日` : '● 今天开始建立学习记录';
+  $('#learningInsight').textContent = practiceCount ? `你已经完成 ${practiceCount} 次逐句练习；每次练习时长与录音次数都保存在当前设备。` : '选择一句英文开始跟读，练习时长、次数与评分会自动记录。';
+  $('#legendPractice').textContent = `跟读 ${Math.round(practiceSeconds / 60)} 分钟`;
+  $('#legendListening').textContent = `听力 ${Math.round(listeningSeconds / 60)} 分钟`;
+  $('#legendReview').textContent = `复习 ${Math.round((analytics.data.views?.vocabulary?.practiceSeconds || 0) / 60)} 分钟`;
+  const bars = $$('.bar-chart > div span');
+  const dayValues = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(); date.setDate(date.getDate() - (6 - offset));
+    const views = analytics.data.days?.[date.toISOString().slice(0, 10)]?.views || {};
+    return Object.values(views).reduce((sum, seconds) => sum + Number(seconds || 0), 0);
+  });
+  const maxDay = Math.max(60, ...dayValues);
+  bars.forEach((bar, index) => { bar.style.height = `${Math.max(dayValues[index] ? 8 : 3, Math.round((dayValues[index] / maxDay) * 100))}%`; });
+  const lastScore = scores.length ? sentenceStats.flatMap((item) => item.scores || []).at(-1) : null;
+  [['pronunciation', 'pronunciation'], ['fluency', 'fluency'], ['completeness', 'completeness']].forEach(([rowName, scoreName]) => {
+    const row = $(`.skill-row[data-skill="${rowName}"]`); const value = Number(lastScore?.[scoreName]);
+    $('b', row).textContent = Number.isFinite(value) ? Math.round(value) : '—'; $('i', row).style.width = `${Number.isFinite(value) ? Math.min(100, value) : 0}%`;
+  });
+  const vocabularyRow = $('.skill-row[data-skill="vocabulary"]');
+  const vocabularyProgress = Math.min(100, practiceCount * 8);
+  $('b', vocabularyRow).textContent = practiceCount; $('i', vocabularyRow).style.width = `${vocabularyProgress}%`;
+  $('#skillInsight p').textContent = lastScore ? `最近一次真实评分为 ${Math.round(lastScore.total)} 分；继续练习当前句子以观察变化。` : '连接真实语音评分服务并完成首次跟读后，这里会展示能力变化。';
+  const topic = currentTopic();
+  if (topic) {
+    const completed = topic.chapters.filter((chapter) => analytics.ensure('chapters', `${topic.id}:${chapter.id}`).practiceCount > 0).length;
+    const progress = topic.chapters.length ? Math.round((completed / topic.chapters.length) * 100) : 0;
+    $('#overviewTopicTitle').textContent = topic.title;
+    $('#overviewTopicMeta').textContent = `${topic.channelTitle || 'YouTube'} · ${topic.transcriptOrigin === 'official-captions' ? '官方字幕' : '练习稿待核对'}`;
+    $('#overviewTopicProgress').style.width = `${progress}%`; $('#overviewTopicProgressLabel').textContent = `${progress}%`;
+  }
+}
 
 const copy = {
   zh: {
@@ -85,6 +262,248 @@ const exampleTranslations = {
   vi: ['Cách tốt nhất để xây dựng sự tự tin là luyện tập một chút mỗi ngày.', 'Tôi hoàn toàn tin tưởng vào khả năng của cô ấy.'],
 };
 
+function parseYouTubeUrl(value) {
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.replace(/^www\./, '');
+    let videoId = '';
+    if (host === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || '';
+    if (host.endsWith('youtube.com')) {
+      videoId = url.searchParams.get('v') || (url.pathname.startsWith('/shorts/') ? url.pathname.split('/')[2] : '') || (url.pathname.startsWith('/embed/') ? url.pathname.split('/')[2] : '');
+    }
+    if (!/^[\w-]{11}$/.test(videoId)) return null;
+    return { videoId, playlistId: url.searchParams.get('list') || '' };
+  } catch { return null; }
+}
+
+function createFallbackChapter() {
+  return { id: `chapter-${Date.now()}`, index: 1, title: '完整视频', titleZh: '完整视频', start: 0, durationLabel: '待同步', previewWords: [], sentences: [] };
+}
+
+async function loadCatalog() {
+  try {
+    const response = await fetch('./data/catalog.json?v=12', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
+    const catalog = await response.json();
+    if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
+    const customTopics = readStoredJSON(STORAGE_KEYS.customTopics, []);
+    state.catalog = { ...catalog, topics: [...catalog.topics, ...customTopics] };
+    const cachedMetadata = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
+    state.catalog.topics.forEach((topic) => { if (cachedMetadata[topic.videoId]) Object.assign(topic, cachedMetadata[topic.videoId]); });
+    if (!state.catalog.topics.some((topic) => topic.id === state.topicId)) state.topicId = state.catalog.topics[0]?.id || '';
+    const topic = currentTopic();
+    if (!topic?.chapters?.some((chapter) => chapter.id === state.chapterId)) state.chapterId = topic?.chapters?.[0]?.id || '';
+    localStorage.setItem('shy-topic-id', state.topicId);
+    localStorage.setItem('shy-chapter-id', state.chapterId);
+    renderPracticeTopic();
+  } catch (error) {
+    console.warn('Course catalog unavailable; using embedded fallback markup.', error.message);
+    $('#practiceChapterTitle').textContent = '课程数据暂时不可用 · 可继续使用本地练习界面';
+  }
+}
+
+function applyTopicMetadataToUI(topic) {
+  if (!topic) return;
+  $('#practiceTopicTitle').textContent = topic.title;
+  $('#practiceTopicEyebrow').textContent = `YOUTUBE · ${topic.channelTitle || 'REAL CONTENT'}`;
+  const chapter = currentChapter();
+  $('#practiceChapterTitle').textContent = chapter ? `Chapter ${String(chapter.index).padStart(2, '0')} · ${chapter.title}` : '尚未同步章节与字幕';
+  $('#videoSourceLabel').textContent = topic.channelTitle && topic.channelTitle !== '等待 YouTube 元数据' ? topic.channelTitle : '通过官方播放器加载';
+  const poster = $('#youtubePoster');
+  if (topic.metadataStatus === 'live') poster.src = topic.thumbnail || `https://i.ytimg.com/vi/${topic.videoId}/hqdefault.jpg`;
+  else poster.removeAttribute('src');
+  poster.onerror = () => poster.removeAttribute('src');
+  $('#videoStage').dataset.videoId = topic.videoId;
+}
+
+function renderTopicSelect() {
+  if (!state.catalog) return;
+  const select = $('#topicSelect');
+  select.replaceChildren(...state.catalog.topics.map((topic) => {
+    const option = document.createElement('option');
+    option.value = topic.id;
+    option.textContent = topic.title;
+    option.selected = topic.id === state.topicId;
+    return option;
+  }));
+}
+
+function appendHighlightedText(target, sentence, words = []) {
+  const vocabulary = new Set(words.map((word) => word.toLowerCase()));
+  const pieces = sentence.split(/([A-Za-z][A-Za-z'-]*)/g);
+  pieces.forEach((piece) => {
+    if (vocabulary.has(piece.toLowerCase())) {
+      const mark = document.createElement('mark');
+      mark.dataset.word = piece.toLowerCase();
+      mark.textContent = piece;
+      target.append(mark);
+    } else target.append(document.createTextNode(piece));
+  });
+}
+
+function renderPracticeSentences(chapter) {
+  const list = $('#practiceLyrics');
+  list.replaceChildren();
+  const sentences = chapter?.sentences || [];
+  if (!sentences.length) {
+    const empty = document.createElement('div');
+    empty.className = 'lyrics-empty';
+    empty.innerHTML = '<span>CC</span><strong>字幕与逐句练习尚未同步</strong><small>视频可以正常播放。导入授权字幕或连接转写服务后即可生成逐句练习。</small>';
+    list.append(empty);
+    state.sentenceId = '';
+    return;
+  }
+  if (!sentences.some((sentence) => sentence.id === state.sentenceId)) state.sentenceId = sentences[0].id;
+  sentences.forEach((sentence, index) => {
+    const button = document.createElement('button');
+    button.className = `lyric-line${sentence.id === state.sentenceId ? ' active' : ''}`;
+    button.dataset.sentenceId = sentence.id;
+    button.dataset.start = sentence.start;
+    const number = document.createElement('em'); number.textContent = index + 1;
+    const content = document.createElement('span');
+    const english = document.createElement('strong'); appendHighlightedText(english, sentence.en, sentence.words);
+    const translation = document.createElement('small'); translation.textContent = sentence.zh;
+    const play = document.createElement('i'); play.textContent = sentence.id === state.sentenceId ? '🔊' : '▶';
+    content.append(english, translation); button.append(number, content, play); list.append(button);
+  });
+  bindPracticeLines();
+}
+
+function renderPracticeTopic() {
+  const topic = currentTopic();
+  if (!topic) return;
+  const chapter = currentChapter();
+  renderTopicSelect();
+  applyTopicMetadataToUI(topic);
+  const chapterCard = $('.chapters-card');
+  $$('.chapter', chapterCard).forEach((node) => node.remove());
+  $('.card-heading .muted', chapterCard).textContent = `${topic.chapters.length} 小节 · 数据可扩展`;
+  topic.chapters.forEach((item) => {
+    const stats = analytics.ensure('chapters', `${topic.id}:${item.id}`);
+    const button = document.createElement('button');
+    button.className = `chapter${item.id === state.chapterId ? ' active' : ''}${stats.practiceCount ? ' done' : ''}`;
+    button.dataset.chapterId = item.id;
+    button.innerHTML = `<i>${item.id === state.chapterId ? '▶' : stats.practiceCount ? '✓' : item.index}</i><span><strong>Chapter ${String(item.index).padStart(2, '0')}</strong><small></small></span><em>${item.durationLabel || formatDuration(item.durationSeconds)}</em>`;
+    $('small', button).textContent = state.language === 'zh' ? (item.titleZh || item.title) : item.title;
+    button.addEventListener('click', () => selectChapter(item.id));
+    chapterCard.append(button);
+  });
+  const preview = $('.preview-card p');
+  preview.textContent = chapter?.previewWords?.length ? `${chapter.previewWords.length} 个重点词 · 自动标记 · 约 3 分钟` : '预习词汇将在字幕同步后生成';
+  renderPracticeSentences(chapter);
+  $('#transcriptStatus').textContent = topic.transcriptOrigin === 'official-captions' ? '官方字幕' : '练习稿 · 待核对';
+  $('#transcriptStatus').className = `status transcript-status ${topic.transcriptOrigin === 'official-captions' ? 'success' : 'warning'}`;
+  renderAnalyticsOverview();
+}
+
+function selectChapter(chapterId) {
+  analytics.end('chapters'); analytics.end('sentences');
+  state.chapterId = chapterId;
+  state.sentenceId = '';
+  localStorage.setItem('shy-chapter-id', chapterId);
+  analytics.begin('chapters', `${state.topicId}:${chapterId}`, true);
+  renderPracticeTopic();
+}
+
+async function refreshYouTubeMetadata(topic) {
+  if (!topic?.videoId) return;
+  const cached = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
+  if (cached[topic.videoId]) {
+    Object.assign(topic, cached[topic.videoId]);
+    applyTopicMetadataToUI(topic); renderTopicSelect();
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const sourceUrl = encodeURIComponent(`https://www.youtube.com/watch?v=${topic.videoId}`);
+    const response = await fetch(`https://www.youtube.com/oembed?url=${sourceUrl}&format=json`, { signal: controller.signal });
+    if (!response.ok) return;
+    const metadata = await response.json();
+    const resolved = { title: metadata.title || topic.title, channelTitle: metadata.author_name || topic.channelTitle, thumbnail: metadata.thumbnail_url || topic.thumbnail, metadataStatus: 'live' };
+    Object.assign(topic, resolved); cached[topic.videoId] = resolved; writeStoredJSON(STORAGE_KEYS.youtubeMetadata, cached);
+    applyTopicMetadataToUI(topic); renderTopicSelect();
+  } catch { /* Offline and restricted networks keep the local catalog fallback. */ }
+  finally { clearTimeout(timeout); }
+}
+
+function resetYouTubePlayer() {
+  $('.youtube-frame')?.remove();
+  $('#videoStage')?.classList.remove('video-live');
+}
+
+function loadYouTubePlayer(start = 0, autoplay = true) {
+  const topic = currentTopic();
+  if (!topic?.videoId) return;
+  refreshYouTubeMetadata(topic);
+  let frame = $('.youtube-frame');
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.className = 'youtube-frame';
+    frame.title = topic.title;
+    frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    frame.allowFullscreen = true;
+    const params = new URLSearchParams({ autoplay: autoplay ? '1' : '0', playsinline: '1', enablejsapi: '1', rel: '0', start: String(Math.max(0, Math.floor(start))) });
+    if (topic.playlistId) params.set('list', topic.playlistId);
+    frame.src = `https://www.youtube-nocookie.com/embed/${topic.videoId}?${params}`;
+    $('#videoStage').append(frame);
+    $('#videoStage').classList.add('video-live');
+    analytics.increment('topics', topic.id, 'practiceCount');
+    if (currentChapter()) analytics.increment('chapters', `${topic.id}:${currentChapter().id}`, 'practiceCount');
+    analytics.begin('topics', topic.id);
+    if (currentChapter()) analytics.begin('chapters', `${topic.id}:${currentChapter().id}`);
+  } else {
+    frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [Number(start), true] }), '*');
+    if (autoplay) frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+  }
+}
+
+function bindPracticeLines() {
+  $$('.lyric-line').forEach((line) => {
+    line.onclick = (event) => {
+      if (event.target.closest('mark')) return;
+      $$('.lyric-line').forEach((item) => { item.classList.remove('active'); const icon = $('i', item); if (icon) icon.textContent = '▶'; });
+      line.classList.add('active'); const icon = $('i', line); if (icon) icon.textContent = '🔊';
+      state.sentenceId = line.dataset.sentenceId || '';
+      const key = `${state.topicId}:${state.chapterId}:${state.sentenceId}`;
+      analytics.begin('sentences', key, true);
+      loadYouTubePlayer(Number(line.dataset.start || 0), true);
+      $$('mark', line).forEach((mark) => { mark.onclick = (markEvent) => { markEvent.stopPropagation(); navigate('vocabulary'); }; });
+      renderAnalyticsOverview();
+    };
+    $$('mark', line).forEach((mark) => { mark.onclick = (event) => { event.stopPropagation(); navigate('vocabulary'); }; });
+  });
+}
+
+function setupCatalogControls() {
+  $('#topicSelect').addEventListener('change', (event) => {
+    analytics.end('topics'); analytics.end('chapters'); analytics.end('sentences');
+    state.topicId = event.target.value;
+    state.chapterId = currentTopic()?.chapters?.[0]?.id || '';
+    state.sentenceId = '';
+    localStorage.setItem('shy-topic-id', state.topicId); localStorage.setItem('shy-chapter-id', state.chapterId);
+    resetYouTubePlayer(); renderPracticeTopic();
+  });
+  $('#importTopic').addEventListener('click', () => showModal({
+    eyebrow: 'ADD REAL CONTENT', title: '添加 YouTube 视频',
+    body: '<div class="modal-field"><label for="youtubeUrlInput">YouTube 视频链接</label><input id="youtubeUrlInput" inputmode="url" placeholder="https://www.youtube.com/watch?v=…"><small>支持普通链接、短链接和带播放列表参数的链接。</small></div><div class="warning-box"><span>CC</span><p><strong>视频元数据将从 YouTube 读取</strong><br><small>字幕与章节需要获得授权后导入，或连接转写服务生成。</small></p></div>',
+    actions: [{ label: '取消' }, { label: '添加主题', style: 'primary', onClick: () => {
+      const parsed = parseYouTubeUrl($('#youtubeUrlInput').value);
+      if (!parsed) { toast('请输入有效的 YouTube 视频链接。'); return false; }
+      const customTopics = readStoredJSON(STORAGE_KEYS.customTopics, []);
+      const id = `youtube-${parsed.videoId.toLowerCase()}`;
+      let topic = state.catalog.topics.find((item) => item.id === id);
+      if (!topic) {
+        topic = { id, provider: 'youtube', ...parsed, sourceUrl: $('#youtubeUrlInput').value.trim(), title: `YouTube 视频 ${parsed.videoId}`, channelTitle: '等待 YouTube 元数据', thumbnail: `https://i.ytimg.com/vi/${parsed.videoId}/hqdefault.jpg`, metadataStatus: 'runtime-oembed', transcriptOrigin: 'pending', chapters: [createFallbackChapter()] };
+        customTopics.push(topic); writeStoredJSON(STORAGE_KEYS.customTopics, customTopics); state.catalog.topics.push(topic);
+      }
+      state.topicId = id; state.chapterId = topic.chapters[0].id; state.sentenceId = '';
+      localStorage.setItem('shy-topic-id', id); localStorage.setItem('shy-chapter-id', state.chapterId);
+      resetYouTubePlayer(); renderPracticeTopic(); refreshYouTubeMetadata(topic); toast('视频主题已添加，并保存在当前设备。');
+    } }],
+  }));
+  $('#youtubePlay').addEventListener('click', () => loadYouTubePlayer(currentChapter()?.start || 0, true));
+}
+
 const viewTitles = {
   overview: ['学习概览', 'Learning overview'], practice: ['视频学习', 'Video practice'], vocabulary: ['生词本', 'Vocabulary'], listening: ['磨耳朵', 'Immersive listening'], downloads: ['离线内容', 'Offline content'], studio: ['内容工作台', 'Content studio'], ai: ['AI 服务', 'AI services'], settings: ['个人设置', 'Settings'],
 };
@@ -93,6 +512,8 @@ function applyAppearance() {
   const resolvedMode = state.mode === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : state.mode;
   document.documentElement.dataset.mode = resolvedMode;
   document.documentElement.dataset.theme = state.theme;
+  document.documentElement.dataset.reduceMotion = state.reduceMotion;
+  document.documentElement.dataset.highContrast = state.highContrast;
   $('#modeIcon').textContent = resolvedMode === 'dark' ? '☾' : '☼';
   const modeToggleLabel = resolvedMode === 'dark' ? '切换到日间模式' : '切换到夜间模式';
   $('#modeToggle').setAttribute('aria-label', modeToggleLabel);
@@ -125,12 +546,20 @@ function updatePageTitle() {
 
 function navigate(view, push = true) {
   if (!viewTitles[view]) view = 'overview';
+  analytics.end('views');
+  if (state.view === 'practice' && view !== 'practice') { analytics.end('topics'); analytics.end('chapters'); analytics.end('sentences'); }
   state.view = view;
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
   $$('[data-view-link]').forEach((button) => button.classList.toggle('active', button.dataset.viewLink === view && (button.classList.contains('nav-item') || button.closest('.mobile-nav'))));
   $('.sidebar').classList.remove('open');
   updatePageTitle();
   if (push && location.hash !== `#/${view}`) history.pushState(null, '', `#/${view}`);
+  analytics.begin('views', view);
+  if (view === 'practice' && currentTopic()) {
+    analytics.begin('topics', currentTopic().id);
+    if (currentChapter()) analytics.begin('chapters', `${currentTopic().id}:${currentChapter().id}`);
+  }
+  renderAnalyticsOverview();
   scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -161,9 +590,16 @@ function showModal({ eyebrow = 'NOTICE', title, body, actions = [] }) {
     button.type = 'button';
     button.className = style === 'primary' ? 'primary-btn' : style === 'text' ? 'text-btn' : 'secondary-btn';
     button.textContent = label;
-    button.addEventListener('click', () => {
-      const close = onClick?.() !== false;
-      if (close) modal.close();
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const close = (await onClick?.()) !== false;
+        if (close) modal.close();
+      } catch (error) {
+        toast(error.message || '操作失败，请稍后重试。');
+      } finally {
+        button.disabled = false;
+      }
     });
     footer.append(button);
   });
@@ -211,26 +647,125 @@ function setupGlobalControls() {
   });
 }
 
-function setupPractice() {
-  $$('.lyric-line').forEach((line) => line.addEventListener('click', () => {
-    $$('.lyric-line').forEach((item) => item.classList.remove('active'));
-    line.classList.add('active');
-  }));
-  let recording = false;
-  $('#recordButton').addEventListener('click', () => {
-    recording = !recording;
-    $('#recordButton').classList.toggle('recording', recording);
-    $('#recordLabel').textContent = recording ? '正在录音 · 点击结束' : '按住跟读';
-    if (!recording) setTimeout(() => toast('录音已完成，模拟评分结果为 86 分。'), 250);
+async function startRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    toast('当前浏览器不支持网页录音，请使用最新版 Chrome、Edge 或 Safari。');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    const recorder = new MediaRecorder(stream);
+    state.mediaStream = stream; state.mediaRecorder = recorder; state.recordingChunks = []; state.recordingStartedAt = performance.now();
+    recorder.addEventListener('dataavailable', (event) => { if (event.data.size) state.recordingChunks.push(event.data); });
+    recorder.addEventListener('stop', completeRecording, { once: true });
+    recorder.start(250);
+    const track = stream.getAudioTracks()[0];
+    const settings = track?.getSettings?.() || {};
+    $('#micDeviceButton').innerHTML = `${track?.label || '默认麦克风'} · ${settings.channelCount === 2 ? 'Stereo Ch 1–2' : 'Mono Ch 1'} <span>⌄</span>`;
+    $('#recordButton').classList.add('recording');
+    $('#recordLabel').textContent = '正在录音 · 点击结束';
+  } catch (error) {
+    toast(error.name === 'NotAllowedError' ? '麦克风权限未开启，请在权限与设备中允许后重试。' : `无法启动录音：${error.message}`);
+  }
+}
+
+function stopRecording() {
+  if (state.mediaRecorder?.state === 'recording') state.mediaRecorder.stop();
+}
+
+function completeRecording() {
+  const duration = Math.max(.1, (performance.now() - state.recordingStartedAt) / 1000);
+  const mimeType = state.mediaRecorder?.mimeType || 'audio/webm';
+  const blob = new Blob(state.recordingChunks, { type: mimeType });
+  state.mediaStream?.getTracks().forEach((track) => track.stop());
+  state.mediaRecorder = null; state.mediaStream = null; state.recordingChunks = [];
+  $('#recordButton').classList.remove('recording');
+  $('#recordLabel').textContent = '按住跟读';
+  const sentenceKey = `${state.topicId}:${state.chapterId}:${state.sentenceId || 'unspecified'}`;
+  analytics.increment('sentences', sentenceKey, 'recordings');
+  analytics.event('recording', { sentenceId: sentenceKey, durationSeconds: Number(duration.toFixed(2)), bytes: blob.size, mimeType });
+  analytics.save(); renderAnalyticsOverview();
+  const recordings = (analytics.data.events || []).filter((event) => event.type === 'recording');
+  if ($('#recordingSummary')) $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
+  if ($('#recordingSize')) $('#recordingSize').textContent = formatBytes(recordings.reduce((sum, event) => sum + Number(event.bytes || 0), 0));
+  $('#scoreDataStatus').textContent = '真实录音 · 待 AI 评分';
+  $('#scoreDataStatus').className = 'status warning';
+  const speechProvider = readStoredJSON(STORAGE_KEYS.providers, {}).speech;
+  const speechKey = sessionStorage.getItem('shy-ai-key-speech');
+  if (speechProvider?.lastTestOk && speechKey) {
+    $('#scoreDataStatus').textContent = '正在真实评分…';
+    requestPronunciationScore(blob, speechProvider, speechKey).then((score) => {
+      analytics.addScore('sentences', sentenceKey, score);
+      analytics.addScore('chapters', `${state.topicId}:${state.chapterId}`, score);
+      analytics.addScore('topics', state.topicId, score);
+      renderPracticeScore(score); renderAnalyticsOverview();
+      toast(`真实 AI 评分完成：${Math.round(score.total)} 分。`);
+    }).catch((error) => { $('#scoreDataStatus').textContent = '评分失败'; $('#scoreDataStatus').className = 'status warning'; toast(error.message); });
+  } else toast(`录音已完成（${duration.toFixed(1)} 秒，${Math.max(1, Math.round(blob.size / 1024))} KB）。连接语音评分服务后可生成真实分数。`);
+}
+
+async function requestPronunciationScore(blob, provider, apiKey) {
+  const sentence = currentSentence();
+  const body = new FormData();
+  body.append('audio', blob, `practice-${Date.now()}.webm`);
+  body.append('reference_text', sentence?.en || '');
+  body.append('language', 'en-US');
+  body.append('prompt_id', state.promptId);
+  const response = await fetch(provider.baseUrl, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body });
+  if (!response.ok) throw new Error(`真实语音评分失败：HTTP ${response.status}`);
+  const result = await response.json();
+  const score = {
+    total: Number(result.total ?? result.score),
+    pronunciation: Number(result.pronunciation ?? result.accuracy),
+    fluency: Number(result.fluency),
+    completeness: Number(result.completeness),
+    words: Array.isArray(result.words) ? result.words : [],
+  };
+  if (![score.total, score.pronunciation, score.fluency, score.completeness].every(Number.isFinite)) throw new Error('评分服务返回的数据格式不完整。');
+  return score;
+}
+
+function renderPracticeScore(score) {
+  $('.total-score strong').textContent = Math.round(score.total);
+  const dimensions = [['pronunciation', 2], ['fluency', 3], ['completeness', 4]];
+  dimensions.forEach(([name, position]) => {
+    const cell = $(`.score-grid > div:nth-child(${position})`); const value = Math.round(score[name]);
+    $('strong', cell).textContent = value; $('i b', cell).style.width = `${Math.min(100, Math.max(0, value))}%`;
   });
-  $('#micDeviceButton').addEventListener('click', () => showModal({
-    eyebrow: 'MICROPHONE', title: '麦克风设备与声道',
-    body: `<div class="modal-field"><label>输入设备</label><select><option>MacBook Pro 麦克风（系统默认）</option><option>Blue Yeti USB</option><option>OBS Virtual Microphone</option></select></div><div class="modal-field"><label>输入声道</label><select><option>Mono · Ch 1（推荐）</option><option>Stereo · Ch 1–2</option></select></div><div class="warning-box"><span>♩</span><p><strong>输入状态正常</strong><br><small>48 kHz · 实时音量 -18 dB。录音结束后会立即释放麦克风。</small></p></div>`,
-    actions: [{ label: '进入权限管理', onClick: () => navigate('settings') }, { label: '播放测试音', style: 'primary', onClick: () => toast('麦克风测试通过。') }],
-  }));
-  $('mark[data-word="confidence"]', $('#practiceLyrics')).addEventListener('click', (event) => {
-    event.stopPropagation();
-    navigate('vocabulary');
+  const words = $('.word-scores'); words.replaceChildren();
+  const fallbackWords = (currentSentence()?.en || '').replace(/[^A-Za-z' -]/g, '').split(/\s+/).filter(Boolean);
+  const items = score.words.length ? score.words : fallbackWords.map((word) => ({ word, score: score.pronunciation }));
+  items.forEach((item) => { const span = document.createElement('span'); span.textContent = item.word || item.text || ''; span.className = Number(item.score ?? item.accuracy ?? 100) >= 75 ? 'good' : 'warn'; words.append(span); });
+  $('#scoreDataStatus').textContent = '真实 AI 评分'; $('#scoreDataStatus').className = 'status success';
+  const history = analytics.ensure('sentences', `${state.topicId}:${state.chapterId}:${state.sentenceId || 'unspecified'}`).scores;
+  const labels = $('.history-labels'); labels.replaceChildren(...history.slice(-4).map((item, index) => { const span = document.createElement('span'); span.textContent = `第 ${Math.max(1, history.length - 3 + index)} 次 · ${Math.round(item.total)}`; return span; }));
+}
+
+async function getMicrophoneInfo() {
+  let temporaryStream;
+  try {
+    temporaryStream = await navigator.mediaDevices?.getUserMedia?.({ audio: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devices.filter((device) => device.kind === 'audioinput');
+    const track = temporaryStream?.getAudioTracks?.()[0];
+    const settings = track?.getSettings?.() || {};
+    return { inputs, activeLabel: track?.label || '系统默认麦克风', sampleRate: settings.sampleRate || '浏览器默认', channelCount: settings.channelCount || 1 };
+  } finally { temporaryStream?.getTracks?.().forEach((track) => track.stop()); }
+}
+
+function setupPractice() {
+  bindPracticeLines();
+  $('#recordButton').addEventListener('click', () => state.mediaRecorder?.state === 'recording' ? stopRecording() : startRecording());
+  $('#micDeviceButton').addEventListener('click', async () => {
+    let info;
+    try { info = await getMicrophoneInfo(); }
+    catch { info = { inputs: [], activeLabel: '权限未开启', sampleRate: '—', channelCount: 1 }; }
+    const options = info.inputs.length ? info.inputs.map((device, index) => `<option>${escapeHTML(device.label || `麦克风 ${index + 1}`)}</option>`).join('') : '<option>系统默认麦克风</option>';
+    showModal({
+      eyebrow: 'MICROPHONE', title: '麦克风设备与声道',
+      body: `<div class="modal-field"><label>浏览器可用输入设备</label><select>${options}</select></div><div class="modal-field"><label>当前声道</label><select><option>${info.channelCount === 2 ? 'Stereo · Ch 1–2' : 'Mono · Ch 1'}</option></select></div><div class="warning-box"><span>♩</span><p><strong>${escapeHTML(info.activeLabel)}</strong><br><small>${escapeHTML(info.sampleRate)} Hz · 浏览器会在录音结束后释放麦克风。</small></p></div>`,
+      actions: [{ label: '进入权限管理', onClick: () => navigate('settings') }, { label: '完成', style: 'primary' }],
+    });
   });
 }
 
@@ -364,9 +899,20 @@ function setupListening() {
 }
 
 function setupDownloads() {
+  const recordings = (analytics.data.events || []).filter((event) => event.type === 'recording');
+  const recordingBytes = recordings.reduce((sum, event) => sum + Number(event.bytes || 0), 0);
+  $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
+  $('#recordingSize').textContent = formatBytes(recordingBytes);
+  $('#offlineVocabularySummary').textContent = `${$$('.word-list-item').length} 个词 · ${state.catalog?.topics?.length || 0} 个主题`;
+  if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
+    $('#storageUsed').textContent = `已使用 ${formatBytes(usage)}`;
+    $('#storageAvailable').textContent = formatBytes(Math.max(0, quota - usage));
+    $('#storageBreakdown').textContent = `浏览器总配额 ${formatBytes(quota)} · 数据来自 Storage API`;
+    $('#storageUsageBar').style.width = `${quota ? Math.min(100, (usage / quota) * 100) : 0}%`;
+  }).catch(() => { $('#storageUsed').textContent = '存储用量不可用'; });
   $('#demoDownload').addEventListener('click', () => showModal({
     eyebrow: 'CELLULAR DATA', title: '将使用较多移动数据',
-    body: `<div class="warning-box"><span>⚠</span><p><strong>本次预计使用约 286 MB 移动数据</strong><br><small>包含 2 个视频、3 个音频和双语字幕。建议连接 Wi-Fi 后继续。</small></p></div><p>只有在你手动确认后，下载才会开始。</p>`,
+    body: `<div class="warning-box"><span>⚠</span><p><strong>授权媒体示例预计使用约 286 MB 移动数据</strong><br><small>超过 50 MB，建议连接 Wi-Fi 后继续。YouTube 内容不会由本应用直接下载。</small></p></div><p>只有在你手动确认后，获得授权的媒体下载才会开始。</p>`,
     actions: [{ label: '取消下载' }, { label: '等待 Wi-Fi', onClick: () => toast('任务已加入队列，将在连接 Wi-Fi 后自动开始。') }, { label: '仍然下载', style: 'primary', onClick: () => toast('已确认使用移动数据，下载任务开始。') }],
   }));
   $('#downloadSettings').addEventListener('click', () => showModal({ eyebrow: 'DOWNLOAD SETTINGS', title: '下载设置', body: `<div class="modal-field"><label>网络策略</label><select><option>移动数据超过 50 MB 时询问</option><option>仅 Wi-Fi 下载</option><option>禁止移动数据下载</option></select></div><div class="modal-field"><label>默认视频质量</label><select><option>720p（推荐）</option><option>360p</option><option>1080p</option></select></div><div class="modal-field"><label>最大缓存空间</label><select><option>10 GB</option><option>5 GB</option><option>无限制</option></select></div>`, actions: [{ label: '取消' }, { label: '保存设置', style: 'primary', onClick: () => toast('下载设置已保存。') }] }));
@@ -376,30 +922,210 @@ function setupDownloads() {
   $('#selectAllDownloads').addEventListener('change', (event) => $$('.download-row input[type="checkbox"]').forEach((checkbox) => checkbox.checked = event.target.checked));
 }
 
-function setupStudio() {
-  $('#inspectAudio').addEventListener('click', () => { $('#sourceCheck').style.display = 'flex'; toast('在线音频检查完成：格式、Range 请求和授权信息正常。'); });
-  $('#generatePpt').addEventListener('click', () => {
-    const button = $('#generatePpt');
-    button.disabled = true; button.textContent = '✦ 正在生成大纲与 Slide…';
-    setTimeout(() => { button.textContent = '✓ 已生成 8 页 · 预览右侧结果'; toast('HTML PPT 已生成，音频时间轴同步完成。'); }, 1300);
-    setTimeout(() => { button.disabled = false; button.textContent = '✦ 重新生成 HTML PPT'; }, 3000);
+function providerEndpoint(baseUrl, path) {
+  const base = new URL(baseUrl);
+  base.pathname = `${base.pathname.replace(/\/?$/, '/')}${path.replace(/^\//, '')}`;
+  base.search = ''; base.hash = '';
+  return base.href;
+}
+
+function readAudioMetadata(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file); const audio = new Audio();
+    const cleanup = () => URL.revokeObjectURL(url);
+    const timeout = setTimeout(() => { cleanup(); reject(new Error('读取音频信息超时。')); }, 10000);
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => { clearTimeout(timeout); const duration = audio.duration; cleanup(); resolve({ duration }); };
+    audio.onerror = () => { clearTimeout(timeout); cleanup(); reject(new Error('浏览器无法读取这个音频格式。')); };
+    audio.src = url;
   });
 }
 
-function setupAI() {
-  $$('.test-model').forEach((button) => button.addEventListener('click', () => {
-    const original = button.textContent; button.textContent = '测试中…'; button.disabled = true;
-    setTimeout(() => { button.textContent = original; button.disabled = false; toast('连接成功 · 延迟 642 ms · 语音能力已验证。'); }, 900);
-  }));
-  const providerModal = () => showModal({ eyebrow: 'AI PROVIDER', title: '添加 API 厂商', body: `<div class="modal-field"><label>厂商类型</label><select><option>OpenAI-compatible</option><option>Azure OpenAI</option><option>Azure Speech</option><option>Google / Gemini</option></select></div><div class="modal-field"><label>API Base URL</label><input value="https://api.example.com/v1"></div><div class="modal-field"><label>API Key</label><input type="password" value="sk-placeholder"></div>`, actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: () => toast('API 连接测试成功，密钥已加密保存。') }] });
-  $('#addProvider').addEventListener('click', providerModal); $('#configureProvider').addEventListener('click', providerModal);
-  $('#restorePrompt').addEventListener('click', () => {
-    $('#promptEditor').value = '你是一位耐心、准确的英语发音教练。根据语音服务返回的逐词与音素分数，为学习者提供简洁、可执行的反馈。不要修改原始分数。';
-    toast('已恢复系统默认提示词，尚未保存。');
+function showStudioSource(title, meta) {
+  $('#sourceCheckTitle').textContent = title; $('#sourceCheckMeta').textContent = meta; $('#sourceCheck').classList.remove('hidden');
+}
+
+async function acceptAudioFile(file) {
+  if (!file || (!file.type.startsWith('audio/') && !/\.(mp3|m4a|wav|ogg|flac)$/i.test(file.name))) { toast('请选择支持的纯音频文件。'); return; }
+  try {
+    const metadata = await readAudioMetadata(file);
+    state.studioSource = { type: 'file', file, duration: metadata.duration };
+    showStudioSource(file.name, `${formatDuration(metadata.duration)} · ${formatBytes(file.size)} · ${file.type || '音频文件'} · 本地读取`);
+    toast('已读取真实音频元数据，文件尚未上传。');
+  } catch (error) { toast(error.message); }
+}
+
+async function generateSlidesWithAI(file) {
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = providers.openai; const apiKey = sessionStorage.getItem('shy-ai-key-openai');
+  if (!provider?.lastTestOk || !apiKey) throw new Error('请先在 AI 服务中完成真实连接测试；API Key 只保存在当前标签页。');
+  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.audioModel || 'whisper-1');
+  const transcriptionResponse = await fetch(providerEndpoint(provider.baseUrl, 'audio/transcriptions'), { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: transcriptionBody });
+  if (!transcriptionResponse.ok) throw new Error(`音频转写失败：HTTP ${transcriptionResponse.status}`);
+  const transcription = await transcriptionResponse.json(); const transcript = transcription.text || '';
+  if (!transcript) throw new Error('转写服务没有返回文本。');
+  const prompt = `请把下面的英语音频转写整理为 6-10 页口语学习 HTML PPT 大纲。仅返回 JSON：{"slides":[{"title":"","body":"","keywords":[""]}]}。转写：${transcript.slice(0, 12000)}`;
+  const completionResponse = await fetch(providerEndpoint(provider.baseUrl, 'chat/completions'), { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: provider.model, messages: [{ role: 'user', content: prompt }], temperature: .3 }) });
+  if (!completionResponse.ok) throw new Error(`课件生成失败：HTTP ${completionResponse.status}`);
+  const completion = await completionResponse.json(); const content = completion.choices?.[0]?.message?.content || '';
+  const parsed = JSON.parse(content.replace(/^```(?:json)?\s*|\s*```$/g, '')); if (!parsed.slides?.length) throw new Error('模型返回的课件结构无效。');
+  return { transcript, slides: parsed.slides };
+}
+
+function renderGeneratedSlide(slide, count) {
+  const canvas = $('.slide-canvas');
+  $('.slide-kicker', canvas).textContent = `AI GENERATED · ${count} SLIDES`;
+  $('h2', canvas).textContent = slide.title || 'Generated lesson';
+  $('p', canvas).textContent = slide.body || '';
+  const words = $('.slide-words', canvas); words.replaceChildren(...(slide.keywords || []).slice(0, 4).map((word) => { const span = document.createElement('span'); span.textContent = word; return span; }));
+}
+
+function setupStudio() {
+  $('#chooseAudio').addEventListener('click', () => $('#audioFileInput').click());
+  $('#audioFileInput').addEventListener('change', (event) => acceptAudioFile(event.target.files[0]));
+  const zone = $('#uploadZone');
+  ['dragenter', 'dragover'].forEach((type) => zone.addEventListener(type, (event) => { event.preventDefault(); zone.classList.add('dragging'); }));
+  ['dragleave', 'drop'].forEach((type) => zone.addEventListener(type, (event) => { event.preventDefault(); zone.classList.remove('dragging'); }));
+  zone.addEventListener('drop', (event) => acceptAudioFile(event.dataTransfer.files[0]));
+  $('#inspectAudio').addEventListener('click', async () => {
+    const value = $('#audioUrlInput').value.trim(); let url;
+    try { url = new URL(value); if (url.protocol !== 'https:') throw new Error(); }
+    catch { toast('请输入有效的 HTTPS 音频地址。'); return; }
+    const button = $('#inspectAudio'); button.disabled = true; button.textContent = '检查中…';
+    try {
+      const response = await fetch(url, { method: 'HEAD' }); if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const type = response.headers.get('content-type') || '未知格式'; const bytes = Number(response.headers.get('content-length') || 0);
+      state.studioSource = { type: 'url', url: url.href, contentType: type, bytes };
+      showStudioSource(url.pathname.split('/').pop() || url.hostname, `${type} · ${bytes ? formatBytes(bytes) : '大小未知'} · 已完成真实 HEAD 请求`);
+      toast('在线音频地址检查通过。');
+    } catch (error) { toast(`在线音频检查失败：${error.message}。来源需要允许跨域 HEAD 请求。`); }
+    finally { button.disabled = false; button.textContent = '检查'; }
   });
-  $('#testPrompt').addEventListener('click', () => showModal({ eyebrow: 'PROMPT A/B TEST', title: '提示词对比测试', body: `<div class="warning-box"><span>86</span><p><strong>新模板输出通过验证</strong><br><small>发音 89 · 流利度 82 · 完整度 91<br>建议：重读 con-FI-dence 的第一音节。</small></p></div><p>响应时间 1.2 秒 · 估算费用 ¥0.03 · JSON Schema 完整。</p>`, actions: [{ label: '保留旧模板' }, { label: '启用新版本', style: 'primary', onClick: () => toast('鼓励型反馈 v4 已启用。') }] }));
-  $('#savePrompt').addEventListener('click', () => toast('提示词已保存为 v4 并启用，历史评分仍使用原版本。'));
-  $('#newPrompt').addEventListener('click', () => toast('已复制当前模板，可编辑后另存为新模板。'));
+  $('#generatePpt').addEventListener('click', async () => {
+    if (!state.studioSource) { toast('请先选择本地音频或检查在线音频。'); return; }
+    if (state.studioSource.type !== 'file') { toast('当前真实 AI 流程仅支持本地音频文件；在线来源需先由服务端安全拉取。'); return; }
+    const button = $('#generatePpt'); button.disabled = true; button.textContent = '✦ 正在转写并生成课件…';
+    try {
+      const result = await generateSlidesWithAI(state.studioSource.file); renderGeneratedSlide(result.slides[0], result.slides.length);
+      button.textContent = `✓ 已生成 ${result.slides.length} 页 · 查看预览`; toast('真实 AI 转写与 HTML PPT 大纲生成完成。');
+    } catch (error) { toast(error.message); button.textContent = '✦ AI 生成 HTML PPT'; }
+    finally { button.disabled = false; }
+  });
+}
+
+function updateProviderCards() {
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {});
+  $$('.provider-card[data-provider]').forEach((card) => {
+    const provider = providers[card.dataset.provider];
+    const status = $('.provider-status', card);
+    if (!provider) { status.textContent = '● 待配置'; status.className = 'status warning provider-status'; return; }
+    status.textContent = provider.lastTestOk ? `● 已验证${provider.speechDetected ? ' · 语音' : ''}` : '● 已保存 · 待测试';
+    status.className = `status ${provider.lastTestOk ? 'success' : 'warning'} provider-status`;
+  });
+}
+
+async function testProviderConnection(providerId, config, apiKey) {
+  let endpoint;
+  try {
+    const base = new URL(config.baseUrl);
+    if (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error('API 地址必须使用 HTTPS。');
+    endpoint = providerId === 'openai' ? providerEndpoint(base.href, 'models') : base.href;
+  } catch (error) { throw new Error(error.message || 'API 地址无效。'); }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(endpoint, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: controller.signal });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`连接失败：HTTP ${response.status}${text ? ` · ${text.slice(0, 90)}` : ''}`);
+    let payload = null;
+    try { payload = JSON.parse(text); } catch { /* A successful health endpoint may return plain text. */ }
+    const modelNames = Array.isArray(payload?.data) ? payload.data.map((model) => model.id || '').join(' ') : '';
+    return { speechDetected: providerId === 'speech' || /audio|speech|whisper|transcrib|realtime/i.test(modelNames), modelCount: payload?.data?.length || 0 };
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('连接超时，请检查 API 地址、网络或跨域配置。');
+    throw error;
+  } finally { clearTimeout(timeout); }
+}
+
+function openProviderModal(providerId = 'openai') {
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {});
+  const stored = providers[providerId] || {};
+  const defaultUrl = providerId === 'openai' ? 'https://api.example.com/v1/' : 'https://speech.example.com/health';
+  showModal({
+    eyebrow: 'REAL API CONNECTION', title: providerId === 'speech' ? '配置语音评分服务' : '配置 OpenAI-compatible 服务',
+    body: `<div class="modal-field"><label for="providerBaseUrl">${providerId === 'speech' ? '评分 API URL（GET 健康检查 / POST 评分）' : 'API Base URL'}</label><input id="providerBaseUrl" inputmode="url" value="${escapeHTML(stored.baseUrl || defaultUrl)}"></div><div class="modal-field"><label for="providerModel">默认模型</label><input id="providerModel" value="${escapeHTML(stored.model || '')}" placeholder="例如 gpt-4.1-mini / pronunciation-v1"></div>${providerId === 'openai' ? `<div class="modal-field"><label for="providerAudioModel">音频转写模型</label><input id="providerAudioModel" value="${escapeHTML(stored.audioModel || 'whisper-1')}" placeholder="whisper-1"></div>` : ''}<div class="modal-field"><label for="providerApiKey">API Key（仅保存在当前标签页）</label><input id="providerApiKey" type="password" autocomplete="off" placeholder="不会写入本地持久存储"></div><div class="warning-box"><span>🔒</span><p><strong>这会发起真实网络请求</strong><br><small>${providerId === 'speech' ? 'POST 需接受 audio、reference_text，并返回 total、pronunciation、fluency、completeness。' : '浏览器直连需要厂商允许 CORS。生产环境建议通过受控后端代理保存密钥。'}</small></p></div>`,
+    actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
+      const config = { baseUrl: $('#providerBaseUrl').value.trim(), model: $('#providerModel').value.trim(), audioModel: $('#providerAudioModel')?.value.trim() || '', updatedAt: new Date().toISOString() };
+      const apiKey = $('#providerApiKey').value.trim();
+      if (!config.baseUrl) { toast('请填写 API 地址。'); return false; }
+      const result = await testProviderConnection(providerId, config, apiKey);
+      providers[providerId] = { ...config, ...result, lastTestOk: true, lastTestedAt: new Date().toISOString() };
+      writeStoredJSON(STORAGE_KEYS.providers, providers);
+      if (apiKey) sessionStorage.setItem(`shy-ai-key-${providerId}`, apiKey);
+      updateProviderCards();
+      toast(`真实连接测试通过${result.modelCount ? ` · 读取到 ${result.modelCount} 个模型` : ''}${result.speechDetected ? ' · 支持语音' : ''}。`);
+    } }],
+  });
+}
+
+function getPromptLibrary() {
+  const stored = readStoredJSON(STORAGE_KEYS.prompts, null);
+  if (stored?.items?.length) return stored;
+  return { activeId: 'encouraging', items: DEFAULT_PROMPTS.map((prompt) => ({ ...prompt })), updatedAt: null };
+}
+
+function savePromptLibrary(library) {
+  library.updatedAt = new Date().toISOString();
+  writeStoredJSON(STORAGE_KEYS.prompts, library);
+}
+
+function renderPromptLibrary() {
+  const library = getPromptLibrary();
+  if (!library.items.some((prompt) => prompt.id === state.promptId)) state.promptId = library.activeId || library.items[0].id;
+  const tabs = $('#promptTabs'); tabs.replaceChildren();
+  library.items.forEach((prompt) => {
+    const button = document.createElement('button');
+    button.classList.toggle('active', prompt.id === state.promptId);
+    button.textContent = prompt.name;
+    if (prompt.id === library.activeId) { const status = document.createElement('span'); status.textContent = '启用中'; button.append(status); }
+    button.addEventListener('click', () => { state.promptId = prompt.id; localStorage.setItem('shy-prompt-id', prompt.id); renderPromptLibrary(); });
+    tabs.append(button);
+  });
+  const current = library.items.find((prompt) => prompt.id === state.promptId) || library.items[0];
+  $('#promptEditor').value = current.system;
+  $('#promptVersion').textContent = `${current.isDefault ? '系统模板' : '自定义模板'} · ${library.updatedAt ? new Date(library.updatedAt).toLocaleDateString() : '未修改'}`;
+  $('#deletePrompt').disabled = Boolean(current.isDefault);
+}
+
+function setupAI() {
+  updateProviderCards();
+  $$('.test-model').forEach((button) => button.addEventListener('click', () => openProviderModal(button.closest('[data-provider]')?.dataset.provider || 'openai')));
+  $('#addProvider').addEventListener('click', () => openProviderModal('openai')); $('#configureProvider').addEventListener('click', () => openProviderModal('openai'));
+  renderPromptLibrary();
+  $('#restorePrompt').addEventListener('click', () => {
+    const fallback = DEFAULT_PROMPTS.find((prompt) => prompt.id === state.promptId) || DEFAULT_PROMPTS[0];
+    $('#promptEditor').value = fallback.system;
+    toast('已恢复系统默认内容，点击“保存并启用”后生效。');
+  });
+  $('#testPrompt').addEventListener('click', () => showModal({ eyebrow: 'LOCAL PROMPT CHECK', title: '提示词结构检查', body: `<div class="warning-box"><span>✓</span><p><strong>模板变量与长度检查通过</strong><br><small>当前仅执行本地结构验证；连接 AI 服务后才能运行真实 A/B 输出测试。</small></p></div><p>已识别变量：reference_text、word_scores、learner_level、feedback_language。</p>`, actions: [{ label: '完成', style: 'primary' }] }));
+  $('#savePrompt').addEventListener('click', () => {
+    const library = getPromptLibrary();
+    const current = library.items.find((prompt) => prompt.id === state.promptId);
+    if (!current) return;
+    current.system = $('#promptEditor').value.trim(); library.activeId = current.id; savePromptLibrary(library); renderPromptLibrary();
+    toast(`“${current.name}”已保存并启用。`);
+  });
+  $('#newPrompt').addEventListener('click', () => showModal({ eyebrow: 'NEW PROMPT', title: '新建评分提示词', body: '<div class="modal-field"><label for="newPromptName">模板名称</label><input id="newPromptName" maxlength="30" placeholder="例如：面试口语"></div>', actions: [{ label: '取消' }, { label: '创建副本', style: 'primary', onClick: () => {
+    const name = $('#newPromptName').value.trim(); if (!name) { toast('请填写模板名称。'); return false; }
+    const library = getPromptLibrary(); const current = library.items.find((prompt) => prompt.id === state.promptId) || library.items[0];
+    const prompt = { id: `custom-${Date.now()}`, name, system: current.system, isDefault: false };
+    library.items.push(prompt); state.promptId = prompt.id; savePromptLibrary(library); localStorage.setItem('shy-prompt-id', prompt.id); renderPromptLibrary(); toast('已创建提示词副本。');
+  } }] }));
+  $('#deletePrompt').addEventListener('click', () => {
+    const library = getPromptLibrary(); const current = library.items.find((prompt) => prompt.id === state.promptId);
+    if (!current || current.isDefault) { toast('系统默认模板不能删除。'); return; }
+    library.items = library.items.filter((prompt) => prompt.id !== current.id); state.promptId = library.activeId === current.id ? 'encouraging' : library.activeId; library.activeId = state.promptId;
+    savePromptLibrary(library); localStorage.setItem('shy-prompt-id', state.promptId); renderPromptLibrary(); toast('自定义提示词已删除。');
+  });
 }
 
 function setupSettings() {
@@ -411,9 +1137,15 @@ function setupSettings() {
     state.theme = button.dataset.themeChoice;
     localStorage.setItem('shy-theme', state.theme); applyAppearance();
   }));
+  $('#reduceMotion').checked = state.reduceMotion; $('#highContrast').checked = state.highContrast;
+  $('#reduceMotion').addEventListener('change', (event) => { state.reduceMotion = event.target.checked; localStorage.setItem('shy-reduce-motion', state.reduceMotion); applyAppearance(); });
+  $('#highContrast').addEventListener('change', (event) => { state.highContrast = event.target.checked; localStorage.setItem('shy-high-contrast', state.highContrast); applyAppearance(); });
   $('#siteLanguage').addEventListener('change', (event) => { state.language = event.target.value; localStorage.setItem('shy-language', state.language); applyLanguage(); });
   $('#defaultDefinitionLanguage').value = state.definitionLanguage;
   $('#defaultDefinitionLanguage').addEventListener('change', (event) => updateDefinitions(event.target.value));
+  const profile = readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
+  $('#nicknameInput').value = profile.nickname; $('#signatureInput').value = profile.signature; $('#signatureCount').textContent = [...profile.signature].length; $('#profileAvatar').textContent = profile.avatar;
+  $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === profile.avatar));
   $$('.avatar-options .avatar').forEach((button) => button.addEventListener('click', () => {
     $$('.avatar-options .avatar').forEach((item) => item.classList.remove('selected'));
     button.classList.add('selected'); $('#profileAvatar').textContent = button.dataset.avatar;
@@ -425,20 +1157,40 @@ function setupSettings() {
     nicknameTimer = setTimeout(() => {
       const normalized = event.target.value.trim().toLowerCase().replace(/\s+/g, ' ');
       const available = normalized.length >= 2 && !reserved.includes(normalized);
-      $('#nicknameStatus').textContent = available ? '✓ 可用' : '已被使用 · 试试 LinSpeak_27';
+      $('#nicknameStatus').textContent = available ? '本机格式可用' : '保留名称 · 试试 LinSpeak_27';
       $('#nicknameStatus').style.color = available ? 'var(--green)' : 'var(--red)';
     }, 420);
   });
   $('#signatureInput').addEventListener('input', (event) => $('#signatureCount').textContent = [...event.target.value].length);
-  $('#saveProfile').addEventListener('click', () => toast('个人资料已保存，昵称唯一性验证通过。'));
-  $('#testMic').addEventListener('click', () => toast('麦克风测试通过 · Mono Ch 1 · 48 kHz。'));
+  $('#saveProfile').addEventListener('click', () => {
+    const nickname = $('#nicknameInput').value.trim();
+    if (nickname.length < 2 || reserved.includes(nickname.toLowerCase())) { toast('昵称格式不可用，请修改后再保存。'); return; }
+    writeStoredJSON(STORAGE_KEYS.profile, { nickname, signature: $('#signatureInput').value.trim(), avatar: $('#profileAvatar').textContent, updatedAt: new Date().toISOString() });
+    toast('个人资料已保存在当前设备。全站唯一昵称需连接账号服务后验证。');
+  });
+  $('#testMic').addEventListener('click', async () => {
+    const button = $('#testMic'); button.disabled = true; button.textContent = '检测中…';
+    try {
+      const info = await getMicrophoneInfo();
+      $('#micDeviceSummary').textContent = `${info.activeLabel} · ${info.channelCount === 2 ? 'Stereo Ch 1–2' : 'Mono Ch 1'}`;
+      $('#micPermissionStatus').textContent = '已允许'; $('#micPermissionStatus').className = 'status success';
+      toast(`麦克风检测通过 · ${info.sampleRate} Hz。`);
+    } catch (error) {
+      $('#micPermissionStatus').textContent = '未允许'; $('#micPermissionStatus').className = 'status warning';
+      toast(error.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在浏览器站点设置中开启。' : `麦克风检测失败：${error.message}`);
+    } finally { button.disabled = false; button.textContent = '测试'; }
+  });
+  if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
+    $('#storageSummary').textContent = `已用 ${formatBytes(usage)} · 配额 ${formatBytes(quota)}`;
+    $('#storagePermissionStatus').textContent = '可用'; $('#storagePermissionStatus').className = 'status success';
+  }).catch(() => { $('#storageSummary').textContent = '浏览器未提供存储用量'; $('#storagePermissionStatus').textContent = '受限'; });
   $('#authPreview').addEventListener('click', () => {
     let authMode = 'login';
     let authMethod = 'email';
     showModal({
       eyebrow: 'WELCOME TO SHY2SPEAK',
-      title: '登录 Shy2Speak',
-      body: `<div class="auth-tabs" id="authModeTabs"><button class="active" type="button" data-auth-mode="login">登录</button><button type="button" data-auth-mode="register">注册</button></div><strong class="auth-method-label">选择账号方式</strong><div class="auth-methods"><button class="auth-method active" type="button" data-auth-method="email"><span class="auth-method-icon">✉</span><span class="auth-method-copy"><strong>邮箱</strong><small>使用邮箱地址</small></span></button><button class="auth-method" type="button" data-auth-method="phone"><span class="auth-method-icon">☎</span><span class="auth-method-copy"><strong>手机号</strong><small>使用短信验证</small></span></button></div><div class="modal-field"><label id="authAccountLabel" for="authAccount">邮箱地址</label><input id="authAccount" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"><small class="auth-account-help" id="authAccountHelp">登录和密码找回信息将发送到此邮箱。</small></div><div class="modal-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码"></div><div class="auth-support"><button class="text-btn" id="authCodeAction" type="button">使用邮箱验证码</button><button class="text-btn" id="authRecovery" type="button">找回密码</button></div>`,
+      title: '登录流程预览',
+      body: `<div class="status-banner"><span>DEMO</span><p><strong>账号后端尚未连接</strong><small>下面用于验证邮箱与手机号分流的交互，不会创建真实账号或发送验证码。</small></p></div><div class="auth-tabs" id="authModeTabs"><button class="active" type="button" data-auth-mode="login">登录</button><button type="button" data-auth-mode="register">注册</button></div><strong class="auth-method-label">选择账号方式</strong><div class="auth-methods"><button class="auth-method active" type="button" data-auth-method="email"><span class="auth-method-icon">✉</span><span class="auth-method-copy"><strong>邮箱</strong><small>使用邮箱地址</small></span></button><button class="auth-method" type="button" data-auth-method="phone"><span class="auth-method-icon">☎</span><span class="auth-method-copy"><strong>手机号</strong><small>使用短信验证</small></span></button></div><div class="modal-field"><label id="authAccountLabel" for="authAccount">邮箱地址</label><input id="authAccount" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"><small class="auth-account-help" id="authAccountHelp">登录和密码找回信息将发送到此邮箱。</small></div><div class="modal-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码"></div><div class="auth-support"><button class="text-btn" id="authCodeAction" type="button">使用邮箱验证码</button><button class="text-btn" id="authRecovery" type="button">找回密码</button></div>`,
       actions: [{ label: '取消' }, { label: '登录', style: 'primary', onClick: () => toast(`${authMethod === 'email' ? '邮箱' : '手机号'}${authMode === 'login' ? '登录' : '注册'}流程预览完成。`) }],
     });
 
@@ -447,7 +1199,7 @@ function setupSettings() {
       $$('.auth-method').forEach((button) => button.classList.toggle('active', button.dataset.authMethod === authMethod));
       const email = authMethod === 'email';
       const account = $('#authAccount');
-      $('#modalTitle').textContent = authMode === 'login' ? '登录 Shy2Speak' : '创建 Shy2Speak 账号';
+      $('#modalTitle').textContent = authMode === 'login' ? '登录流程预览' : '注册流程预览';
       $('#authAccountLabel').textContent = email ? '邮箱地址' : '手机号码';
       account.type = email ? 'email' : 'tel';
       account.inputMode = email ? 'email' : 'tel';
@@ -476,8 +1228,25 @@ function setupPWA() {
   window.installShy2Speak = async () => { if (installPrompt) { installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; } else toast('请使用浏览器菜单中的“安装应用”或“添加到主屏幕”。'); };
 }
 
-function init() {
-  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA(); updateDefinitions(state.definitionLanguage, false); renderAudioTime(); navigate(state.view, false);
+async function init() {
+  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls();
+  await loadCatalog();
+  setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
+  updateDefinitions(state.definitionLanguage, false); renderAudioTime(); renderAnalyticsOverview(); navigate(state.view, false);
+  addEventListener('pagehide', () => analytics.flush());
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) analytics.flush();
+    else {
+      analytics.begin('views', state.view);
+      if (state.view === 'practice' && currentTopic()) {
+        analytics.begin('topics', currentTopic().id);
+        if (currentChapter()) analytics.begin('chapters', `${currentTopic().id}:${currentChapter().id}`);
+      }
+    }
+  });
 }
 
-init();
+init().catch((error) => {
+  console.error('Application initialization failed', error);
+  toast('应用初始化失败，请刷新页面重试。');
+});
