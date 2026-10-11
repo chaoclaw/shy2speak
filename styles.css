@@ -206,8 +206,17 @@ a { color:inherit; }
 .achievement-card h3 { margin:6px 0 3px; }.achievement-card p { margin:0; font-size:10px; color:var(--text-soft); }
 
 /* Practice */
-.practice-layout { display:grid; grid-template-columns:minmax(410px,.94fr) minmax(480px,1.18fr); gap:18px; align-items:start; }
+.practice-layout { display:grid; grid-template-columns:minmax(340px,.78fr) minmax(560px,1.22fr); gap:18px; align-items:start; }
 .practice-left,.practice-right { display:grid; gap:16px; }
+.practice-left { grid-column:1; grid-row:2; }
+.practice-right { grid-column:2; grid-row:2; }
+.practice-learning { grid-column:1/-1; grid-row:1; min-height:390px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); overflow:hidden; }
+.practice-learning .video-card,.practice-learning .lyrics-card { min-width:0; border:0; border-radius:0; box-shadow:none; }
+.practice-learning .video-card,.practice-learning .video-stage { height:100%; }
+.practice-learning .video-stage { min-height:390px; aspect-ratio:auto; }
+.practice-learning .lyrics-card { display:grid; grid-template-rows:auto minmax(0,1fr) auto; border-left:1px solid var(--border); }
+.practice-learning .lyrics-list { max-height:232px; }
+.practice-learning .record-panel { min-height:100px; }
 .video-card { overflow:hidden; }
 .video-stage { position:relative; aspect-ratio:16/9; min-height:300px; overflow:hidden; background:linear-gradient(135deg,#cad2da,#e8ded7); }
 html[data-mode="dark"] .video-stage { filter:brightness(.78); }
@@ -298,7 +307,7 @@ mark { background:var(--amber-soft); color:inherit; padding:1px 3px; border-radi
 @media (max-width:950px) {
   :root { --sidebar:78px; }
   .sidebar { padding:20px 10px; }.brand { padding:0 8px 22px; }.brand-copy,.nav-item b,.mini-profile > div,.mini-profile > .icon-btn { display:none; }.nav-item { justify-content:center; padding:0; }.nav-item > span { width:34px; }.nav-item em { position:absolute; right:1px; top:1px; }.mini-profile { grid-template-columns:1fr; justify-items:center; padding:12px 0 0; }.nav-item.active:before { left:-10px; }
-  .practice-layout { grid-template-columns:1fr; }.practice-left { grid-template-columns:1.2fr .8fr; }.preview-card { grid-column:1/-1; }
+  .practice-layout { grid-template-columns:1fr; }.practice-left,.practice-right,.practice-learning { grid-column:1; grid-row:auto; }.practice-left { grid-template-columns:1.2fr .8fr; }.preview-card { grid-column:1/-1; }
   .vocab-layout { grid-template-columns:250px 1fr; }
   .studio-grid { grid-template-columns:1fr; }.slide-preview { grid-column:auto; }
   .ai-health-grid { grid-template-columns:1fr; }.settings-grid { grid-template-columns:1fr; }.profile-settings { grid-row:auto; }
@@ -318,6 +327,7 @@ mark { background:var(--amber-soft); color:inherit; padding:1px 3px; border-radi
   #view-practice .practice-left,#view-practice .practice-right { display:contents; }
   #view-practice .chapters-card { order:1; padding:14px; }
   #view-practice .preview-card { order:2; padding:14px; }
+  #view-practice .practice-learning { order:3; min-height:0; display:flex; flex-direction:column; }
   #view-practice .video-card { order:3; }
   #view-practice .lyrics-card { order:4; }
   #view-practice .score-card { order:5; }
@@ -329,7 +339,9 @@ mark { background:var(--amber-soft); color:inherit; padding:1px 3px; border-radi
   #view-practice .preview-card h3 { font-size:13px; }
   #view-practice .preview-card p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #view-practice .preview-card .secondary-btn { flex:0 0 auto; min-height:36px; padding:0 11px; font-size:10px; }
-  #view-practice .video-stage { min-height:0; }
+  #view-practice .practice-learning .video-card,#view-practice .practice-learning .video-stage { height:auto; }
+  #view-practice .video-stage { min-height:0; aspect-ratio:16/9; }
+  #view-practice .practice-learning .lyrics-card { border-top:1px solid var(--border); border-left:0; }
   #view-practice .lyrics-toolbar { min-height:50px; padding:8px 10px; }
   #view-practice .lyrics-toolbar .segmented { min-width:0; overflow-x:auto; }
   #view-practice .lyrics-toolbar .segmented button { padding:0 8px; }

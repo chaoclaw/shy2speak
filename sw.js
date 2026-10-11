@@ -1,5 +1,5 @@
-const CACHE = 'shy2speak-prototype-v10';
-const APP_SHELL = ['./', './index.html', './styles.css?v=10', './app.js?v=10', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'shy2speak-prototype-v11';
+const APP_SHELL = ['./', './index.html', './styles.css?v=11', './app.js?v=11', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));

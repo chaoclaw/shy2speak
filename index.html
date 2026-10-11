@@ -8,7 +8,7 @@
     <title>Shy2Speak · 产品原型</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=10" />
+    <link rel="stylesheet" href="./styles.css?v=11" />
   </head>
   <body>
     <div class="app-shell">
@@ -124,15 +124,6 @@
 
             <div class="practice-layout">
               <div class="practice-left">
-                <article class="video-card card">
-                  <div class="video-stage">
-                    <div class="teacher-visual"><div class="teacher-head"></div><div class="teacher-body"></div><div class="speech-card"><small>SMALL TALK</small><strong>Big<br />Connections</strong></div></div>
-                    <button class="big-play">▶</button>
-                    <span class="local-state hidden" id="localState">✓ 本地视频</span>
-                    <div class="video-controls"><button>▶</button><span>02:34 / 08:15</span><div class="media-progress"><i style="width:31%"></i></div><button>字幕</button><button>0.8×</button><button title="视频小窗">▣</button></div>
-                  </div>
-                </article>
-
                 <article class="card chapters-card">
                   <div class="card-heading"><div><span class="eyebrow">CHAPTERS</span><h3>本章内容</h3></div><span class="muted">4 小节 · 约 28 分钟</span></div>
                   <button class="chapter done"><i>✓</i><span><strong>Chapter 01</strong><small>Why Confidence Matters</small></span><em>08:12</em></button>
@@ -147,8 +138,17 @@
                 </article>
               </div>
 
-              <div class="practice-right">
-                <article class="lyrics-card card">
+              <section class="practice-learning card" aria-label="视频与逐句跟读">
+                <article class="video-card">
+                  <div class="video-stage">
+                    <div class="teacher-visual"><div class="teacher-head"></div><div class="teacher-body"></div><div class="speech-card"><small>SMALL TALK</small><strong>Big<br />Connections</strong></div></div>
+                    <button class="big-play">▶</button>
+                    <span class="local-state hidden" id="localState">✓ 本地视频</span>
+                    <div class="video-controls"><button>▶</button><span>02:34 / 08:15</span><div class="media-progress"><i style="width:31%"></i></div><button>字幕</button><button>0.8×</button><button title="视频小窗">▣</button></div>
+                  </div>
+                </article>
+
+                <article class="lyrics-card">
                   <div class="lyrics-toolbar">
                     <div class="segmented"><button class="active">逐句跟读</button><button>全文字幕</button><button>重点表达 <i>8</i></button></div>
                     <div class="toolbar-actions"><button class="icon-btn" title="字幕语言">中/EN</button><button class="icon-btn">⋮</button></div>
@@ -171,7 +171,9 @@
                     <button class="round-control">↻</button>
                   </div>
                 </article>
+              </section>
 
+              <div class="practice-right">
                 <article class="score-card card">
                   <div class="card-heading"><div><span class="eyebrow">AI FEEDBACK</span><h3>本句跟读结果</h3></div><button class="text-btn">查看详情 →</button></div>
                   <div class="word-scores"><span class="good">The</span><span class="good">best</span><span class="good">way</span><span class="good">to</span><span class="good">build</span><span class="warn">confidence</span><span class="good">is</span><span class="good">to</span><span class="good">practice</span><span class="good">every</span><span class="good">day</span></div>
@@ -350,6 +352,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=10"></script>
+    <script src="./app.js?v=11"></script>
   </body>
 </html>
