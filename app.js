@@ -33,6 +33,7 @@ const state = {
 
 const STORAGE_KEYS = {
   analytics: 'shy-learning-analytics-v1',
+  catalog: 'shy-course-catalog-v1',
   customTopics: 'shy-custom-topics-v1',
   youtubeMetadata: 'shy-youtube-metadata-v1',
   providers: 'shy-ai-providers-v1',
@@ -62,6 +63,9 @@ function escapeHTML(value = '') {
 }
 
 let cloudSyncTimer;
+const topicHydrationPromises = new Map();
+const hydratedTopicIds = new Set();
+const topicTranslationPromises = new Map();
 
 function storedProfile() {
   return readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
@@ -321,7 +325,7 @@ function renderAnalyticsOverview() {
   if (topic) {
     const completed = topic.chapters.filter((chapter) => analytics.ensure('chapters', `${topic.id}:${chapter.id}`).practiceCount > 0).length;
     const progress = topic.chapters.length ? Math.round((completed / topic.chapters.length) * 100) : 0;
-    $('#overviewTopicTitle').textContent = topic.title;
+    $('#overviewTopicTitle').textContent = topicDisplayLabel(topic);
     $('#overviewTopicMeta').textContent = `${topic.channelTitle || 'YouTube'} · ${captionStatus(topic).detail}`;
     $('#overviewTopicProgress').style.width = `${progress}%`; $('#overviewTopicProgressLabel').textContent = `${progress}%`;
   }
@@ -411,13 +415,107 @@ function parseYouTubeUrl(value) {
 }
 
 function createFallbackChapter() {
-  return { id: `chapter-${Date.now()}`, index: 1, title: '完整视频', titleZh: '完整视频', start: 0, durationLabel: '待同步', previewWords: [], sentences: [] };
+  return { id: 'chapter-01', index: 1, title: 'Full video', titleZh: '完整视频', start: 0, durationLabel: '待同步', previewWords: [], sentences: [] };
+}
+
+function catalogApiBase() {
+  return String(window.__SHY2SPEAK_CONFIG__?.apiBase || '').replace(/\/+$/, '');
+}
+
+function localizedTopicTitle(topic, language = state.language) {
+  if (!topic || language === 'en') return '';
+  return String(topic.localizedTitles?.[language] || (language === 'zh' ? topic.titleZh : '') || '').trim();
+}
+
+function topicDisplayLabel(topic) {
+  const localized = localizedTopicTitle(topic);
+  if (state.language === 'en') return topic.title;
+  return `${topic.title} · ${localized || '中文译名待生成'}`;
+}
+
+async function ensureTopicTitleTranslation(topic) {
+  if (!topic?.videoId || state.language === 'en' || localizedTopicTitle(topic)) return;
+  const provider = readStoredJSON(STORAGE_KEYS.providers, {}).openai;
+  const apiKey = sessionStorage.getItem('shy-ai-key-openai');
+  if (!provider?.lastTestOk || !provider?.model || !apiKey) return;
+  const key = `${topic.videoId}:${state.language}`;
+  if (topicTranslationPromises.has(key)) return topicTranslationPromises.get(key);
+  const promise = (async () => {
+    try {
+      const languageNames = { zh: '简体中文' };
+      const response = await fetch(providerEndpoint(provider.baseUrl, 'chat/completions'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: provider.model,
+          messages: [{ role: 'user', content: `Translate this English learning-video title into ${languageNames[state.language] || state.language}. Return only the translated title, with no quotes or explanation:\n${topic.title}` }],
+          temperature: 0,
+        }),
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const translated = String(payload?.choices?.[0]?.message?.content || '').trim().replace(/^["'“”]|["'“”]$/g, '');
+      if (!translated || translated.length > 180) return;
+      topic.localizedTitles = { ...(topic.localizedTitles || {}), [state.language]: translated };
+      const cached = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
+      cached[topic.videoId] = { ...(cached[topic.videoId] || {}), localizedTitles: topic.localizedTitles };
+      writeStoredJSON(STORAGE_KEYS.youtubeMetadata, cached);
+      if (currentTopic()?.id === topic.id) renderPracticeTopic();
+    } catch { /* A missing translation never blocks video practice. */ }
+    finally { topicTranslationPromises.delete(key); }
+  })();
+  topicTranslationPromises.set(key, promise);
+  return promise;
+}
+
+async function hydrateTopic(topic) {
+  const apiBase = catalogApiBase();
+  if (!apiBase || !topic?.serverManaged || !topic.videoId || hydratedTopicIds.has(topic.id)) return;
+  if (topicHydrationPromises.has(topic.id)) return topicHydrationPromises.get(topic.id);
+  if (currentTopic()?.id === topic.id && $('#transcriptStatus')) {
+    $('#transcriptStatus').textContent = '正在同步字幕…';
+    $('#transcriptStatus').className = 'status transcript-status warning';
+  }
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(`${apiBase}/catalog/topics/${encodeURIComponent(topic.videoId)}`, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok) throw new Error(`NAS topic HTTP ${response.status}`);
+      const hydrated = await response.json();
+      const index = state.catalog?.topics?.findIndex((candidate) => candidate.id === topic.id) ?? -1;
+      if (index < 0) return;
+      const current = state.catalog.topics[index];
+      state.catalog.topics[index] = {
+        ...current,
+        ...hydrated,
+        localizedTitles: { ...(hydrated.localizedTitles || {}), ...(current.localizedTitles || {}) },
+      };
+      hydratedTopicIds.add(topic.id);
+      if (state.topicId === topic.id) {
+        const next = state.catalog.topics[index];
+        if (!next.chapters?.some((chapter) => chapter.id === state.chapterId)) state.chapterId = next.chapters?.[0]?.id || '';
+        localStorage.setItem('shy-chapter-id', state.chapterId);
+        renderPracticeTopic();
+        ensureTopicTitleTranslation(next);
+      }
+    } catch (error) {
+      console.warn('Topic captions unavailable.', error.message);
+      if (currentTopic()?.id === topic.id) renderPracticeTopic();
+    } finally {
+      clearTimeout(timeout);
+      topicHydrationPromises.delete(topic.id);
+    }
+  })();
+  topicHydrationPromises.set(topic.id, promise);
+  return promise;
 }
 
 async function loadCatalog() {
   try {
-    const apiBase = String(window.__SHY2SPEAK_CONFIG__?.apiBase || '').replace(/\/+$/, '');
+    const apiBase = catalogApiBase();
     let catalog = null;
+    let catalogFromApi = false;
     if (apiBase) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -425,16 +523,20 @@ async function loadCatalog() {
         const response = await fetch(`${apiBase}/catalog`, { cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw new Error(`NAS catalog HTTP ${response.status}`);
         catalog = await response.json();
+        catalogFromApi = true;
       } catch (error) {
         console.warn('NAS caption catalog unavailable; using static catalog.', error.message);
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=16', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=17', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
+      const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
+      if (Array.isArray(storedCatalog?.topics) && storedCatalog.topics.length > catalog.topics.length) catalog = storedCatalog;
     }
     if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
+    if (catalogFromApi || catalog.topics.length > 1) writeStoredJSON(STORAGE_KEYS.catalog, catalog);
     const customTopics = readStoredJSON(STORAGE_KEYS.customTopics, []);
     state.catalog = { ...catalog, topics: [...catalog.topics, ...customTopics] };
     const cachedMetadata = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
@@ -445,6 +547,8 @@ async function loadCatalog() {
     localStorage.setItem('shy-topic-id', state.topicId);
     localStorage.setItem('shy-chapter-id', state.chapterId);
     renderPracticeTopic();
+    hydrateTopic(topic);
+    ensureTopicTitleTranslation(topic);
   } catch (error) {
     console.warn('Course catalog unavailable; using embedded fallback markup.', error.message);
     $('#practiceChapterTitle').textContent = '课程数据暂时不可用 · 可继续使用本地练习界面';
@@ -454,6 +558,9 @@ async function loadCatalog() {
 function applyTopicMetadataToUI(topic) {
   if (!topic) return;
   $('#practiceTopicTitle').textContent = topic.title;
+  const localized = localizedTopicTitle(topic);
+  $('#practiceTopicLocalizedTitle').hidden = state.language === 'en';
+  $('#practiceTopicLocalizedTitle').textContent = localized || '中文译名待生成';
   $('#practiceTopicEyebrow').textContent = `YOUTUBE · ${topic.channelTitle || 'REAL CONTENT'}`;
   const chapter = currentChapter();
   $('#practiceChapterTitle').textContent = chapter ? `Chapter ${String(chapter.index).padStart(2, '0')} · ${chapter.title}` : '尚未同步章节与字幕';
@@ -471,7 +578,7 @@ function renderTopicSelect() {
   select.replaceChildren(...state.catalog.topics.map((topic) => {
     const option = document.createElement('option');
     option.value = topic.id;
-    option.textContent = topic.title;
+    option.textContent = topicDisplayLabel(topic);
     option.selected = topic.id === state.topicId;
     return option;
   }));
@@ -564,6 +671,7 @@ async function refreshYouTubeMetadata(topic) {
     Object.assign(topic, cached[topic.videoId]);
     applyTopicMetadataToUI(topic); renderTopicSelect();
   }
+  if (topic.serverManaged && ['playlist-synced-public-metadata', 'server-synced-public-metadata'].includes(topic.metadataStatus)) return;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -572,7 +680,7 @@ async function refreshYouTubeMetadata(topic) {
     if (!response.ok) return;
     const metadata = await response.json();
     const resolved = { title: metadata.title || topic.title, channelTitle: metadata.author_name || topic.channelTitle, thumbnail: metadata.thumbnail_url || topic.thumbnail, metadataStatus: 'live' };
-    Object.assign(topic, resolved); cached[topic.videoId] = resolved; writeStoredJSON(STORAGE_KEYS.youtubeMetadata, cached);
+    Object.assign(topic, resolved); cached[topic.videoId] = { ...(cached[topic.videoId] || {}), ...resolved, localizedTitles: topic.localizedTitles }; writeStoredJSON(STORAGE_KEYS.youtubeMetadata, cached);
     applyTopicMetadataToUI(topic); renderTopicSelect();
   } catch { /* Offline and restricted networks keep the local catalog fallback. */ }
   finally { clearTimeout(timeout); }
@@ -635,6 +743,8 @@ function setupCatalogControls() {
     state.sentenceId = '';
     localStorage.setItem('shy-topic-id', state.topicId); localStorage.setItem('shy-chapter-id', state.chapterId);
     resetYouTubePlayer(); renderPracticeTopic();
+    hydrateTopic(currentTopic());
+    ensureTopicTitleTranslation(currentTopic());
   });
   $('#importTopic').addEventListener('click', () => showModal({
     eyebrow: 'ADD REAL CONTENT', title: '添加 YouTube 视频',
@@ -670,7 +780,8 @@ function applyAppearance() {
   $('#modeIcon').textContent = resolvedMode === 'dark' ? '☾' : '☼';
   const modeToggleLabel = resolvedMode === 'dark' ? '切换到日间模式' : '切换到夜间模式';
   $('#modeToggle').setAttribute('aria-label', modeToggleLabel);
-  $('#modeToggle').title = modeToggleLabel;
+  $('#modeToggle').dataset.hoverHint = modeToggleLabel;
+  $('#modeToggle').removeAttribute('title');
   const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
   $('meta[name="theme-color"]').setAttribute('content', themeColor);
   $$('.mode-choices button').forEach((button) => button.classList.toggle('active', button.dataset.modeChoice === state.mode));
@@ -689,6 +800,10 @@ function applyLanguage() {
   $('#languageToggle').textContent = state.language === 'zh' ? '中 / EN' : 'EN / 中';
   $('#siteLanguage').value = state.language;
   updatePageTitle();
+  if (state.catalog) {
+    renderPracticeTopic();
+    ensureTopicTitleTranslation(currentTopic());
+  }
 }
 
 function updatePageTitle() {
@@ -801,6 +916,53 @@ function setupGlobalControls() {
       button.classList.add('active');
     }));
   });
+}
+
+function setupHoverToasts() {
+  const hoverToast = document.createElement('div');
+  hoverToast.className = 'hover-toast';
+  hoverToast.id = 'globalHoverToast';
+  hoverToast.setAttribute('role', 'tooltip');
+  document.body.append(hoverToast);
+  let showTimer;
+  let activeButton;
+
+  const labelFor = (button) => button.dataset.hoverHint
+    || button.getAttribute('aria-label')
+    || $('b', button)?.textContent?.trim()
+    || button.textContent.trim().replace(/\s+/g, ' ');
+  const hide = () => {
+    clearTimeout(showTimer);
+    activeButton = null;
+    hoverToast.classList.remove('visible');
+  };
+  const show = (button, immediate = false) => {
+    if (!labelFor(button)) return;
+    clearTimeout(showTimer);
+    activeButton = button;
+    showTimer = setTimeout(() => {
+      if (activeButton !== button) return;
+      hoverToast.textContent = labelFor(button);
+      hoverToast.classList.add('visible');
+      const rect = button.getBoundingClientRect();
+      const toastRect = hoverToast.getBoundingClientRect();
+      const sidebarButton = Boolean(button.closest('.sidebar'));
+      const top = sidebarButton ? rect.top + (rect.height - toastRect.height) / 2 : rect.bottom + 9;
+      const left = sidebarButton ? rect.right + 10 : rect.left + (rect.width - toastRect.width) / 2;
+      hoverToast.style.top = `${Math.max(8, Math.min(innerHeight - toastRect.height - 8, top))}px`;
+      hoverToast.style.left = `${Math.max(8, Math.min(innerWidth - toastRect.width - 8, left))}px`;
+    }, immediate ? 0 : 320);
+  };
+
+  $$('.sidebar button,.top-actions button').forEach((button) => {
+    button.addEventListener('pointerenter', (event) => { if (event.pointerType !== 'touch') show(button); });
+    button.addEventListener('pointerleave', hide);
+    button.addEventListener('focus', () => show(button, true));
+    button.addEventListener('blur', hide);
+    button.addEventListener('click', hide);
+  });
+  addEventListener('scroll', hide, { passive: true });
+  addEventListener('resize', hide, { passive: true });
 }
 
 async function startRecording() {
@@ -1549,7 +1711,7 @@ function setupPWA() {
 async function init() {
   const account = await shyBackend.initialize().catch((error) => ({ session: null, error }));
   state.authSession = account.session || null;
-  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls();
+  applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls(); setupHoverToasts();
   await loadCatalog();
   setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();

@@ -14,7 +14,11 @@
       "videoId": "VFe7Ap1kfk0",
       "playlistId": "PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
       "sourceUrl": "https://www.youtube.com/watch?v=VFe7Ap1kfk0&list=PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
-      "title": "YouTube 英语口语练习",
+      "title": "Mall Vocabulary In English",
+      "localizedTitles": {
+        "en": "Mall Vocabulary In English",
+        "zh": "商场英语词汇"
+      },
       "channelTitle": "等待 YouTube 元数据",
       "thumbnail": "https://i.ytimg.com/vi/VFe7Ap1kfk0/hqdefault.jpg",
       "metadataStatus": "runtime-oembed",

@@ -75,3 +75,11 @@ create table if not exists youtube_catalog_cache (
   expires_at timestamptz not null
 );
 create index if not exists youtube_catalog_cache_expiry_idx on youtube_catalog_cache(expires_at);
+
+create table if not exists youtube_playlist_cache (
+  playlist_id text primary key check (playlist_id ~ '^PL[A-Za-z0-9_-]+$'),
+  payload jsonb not null,
+  fetched_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists youtube_playlist_cache_expiry_idx on youtube_playlist_cache(expires_at);

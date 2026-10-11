@@ -7,6 +7,7 @@ import express from 'express';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
 import { fetchYouTubeTopic } from './youtube-catalog.js';
+import { fetchYouTubePlaylist } from './youtube-playlist.js';
 
 const { Pool } = pg;
 const scrypt = promisify(crypto.scrypt);
@@ -20,8 +21,11 @@ const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
 const YOUTUBE_CAPTIONS_ENABLED = process.env.YOUTUBE_CAPTIONS_ENABLED !== 'false';
+const YOUTUBE_PLAYLIST_SYNC_ENABLED = process.env.YOUTUBE_PLAYLIST_SYNC_ENABLED !== 'false';
 const captionCacheHours = Number(process.env.YOUTUBE_CAPTION_CACHE_HOURS || 168);
 const YOUTUBE_CAPTION_CACHE_HOURS = Number.isFinite(captionCacheHours) ? Math.max(1, captionCacheHours) : 168;
+const playlistCacheHours = Number(process.env.YOUTUBE_PLAYLIST_CACHE_HOURS || 24);
+const YOUTUBE_PLAYLIST_CACHE_HOURS = Number.isFinite(playlistCacheHours) ? Math.max(1, playlistCacheHours) : 24;
 
 if (!DATABASE_URL && !process.env.PGHOST) throw new Error('DATABASE_URL or PostgreSQL PG* variables are required');
 if (AUTH_SECRET.length < 32) throw new Error('AUTH_SECRET must contain at least 32 characters');
@@ -256,6 +260,8 @@ function snapshotsFromPayload(payload) {
 
 const captionSyncPromises = new Map();
 const captionFailureCooldowns = new Map();
+const playlistSyncPromises = new Map();
+const playlistFailureCooldowns = new Map();
 
 async function baseCatalog() {
   const contents = await fs.readFile(catalogPath, 'utf8');
@@ -299,14 +305,65 @@ async function hydratedYouTubeTopic(topic) {
   return sync;
 }
 
-async function hydratedCatalog() {
+function fallbackPlaylist(catalog, playlistId) {
+  const topics = catalog.topics.map((topic) => ({
+    ...topic,
+    serverManaged: true,
+    localizedTitles: { en: topic.title, ...(topic.localizedTitles || {}) },
+  }));
+  return { playlistId, topics, videoCount: topics.length, syncStatus: 'fallback' };
+}
+
+async function syncedPlaylist(catalog) {
+  const playlistId = catalog?.source?.playlistId;
+  if (!/^PL[\w-]+$/.test(playlistId || '')) return { topics: catalog.topics, videoCount: catalog.topics.length };
+  const cachedResult = await pool.query(
+    'select payload, expires_at from youtube_playlist_cache where playlist_id = $1',
+    [playlistId],
+  );
+  const cached = cachedResult.rows[0];
+  if (cached && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
+  if (!YOUTUBE_PLAYLIST_SYNC_ENABLED || Number(playlistFailureCooldowns.get(playlistId) || 0) > Date.now()) {
+    return cached?.payload || fallbackPlaylist(catalog, playlistId);
+  }
+  if (playlistSyncPromises.has(playlistId)) return playlistSyncPromises.get(playlistId);
+
+  const sync = (async () => {
+    try {
+      const payload = { ...(await fetchYouTubePlaylist(playlistId, catalog.topics)), syncStatus: 'synced' };
+      await pool.query(
+        'insert into youtube_playlist_cache(playlist_id, payload, fetched_at, expires_at) values ($1, $2, now(), now() + ($3::text || \' hours\')::interval) on conflict (playlist_id) do update set payload = excluded.payload, fetched_at = excluded.fetched_at, expires_at = excluded.expires_at',
+        [playlistId, payload, String(YOUTUBE_PLAYLIST_CACHE_HOURS)],
+      );
+      playlistFailureCooldowns.delete(playlistId);
+      console.log('YouTube playlist synced:', playlistId, payload.topics.length, 'topics');
+      return payload;
+    } catch (error) {
+      playlistFailureCooldowns.set(playlistId, Date.now() + 10 * 60 * 1000);
+      console.warn('YouTube playlist sync unavailable:', playlistId, error.message);
+      return cached?.payload || fallbackPlaylist(catalog, playlistId);
+    } finally {
+      playlistSyncPromises.delete(playlistId);
+    }
+  })();
+  playlistSyncPromises.set(playlistId, sync);
+  return sync;
+}
+
+async function playlistCatalog() {
   const catalog = await baseCatalog();
-  const topics = await Promise.all(catalog.topics.map(hydratedYouTubeTopic));
+  const playlist = await syncedPlaylist(catalog);
   return {
     ...catalog,
     updatedAt: new Date().toISOString(),
-    source: { ...catalog.source, captionRuntime: 'NAS server public YouTube captions with PostgreSQL cache' },
-    topics,
+    source: {
+      ...catalog.source,
+      playlistRuntime: 'NAS server public YouTube playlist with PostgreSQL cache',
+      captionRuntime: 'NAS server public YouTube captions on demand with PostgreSQL cache',
+      videoCount: playlist.topics.length,
+      playlistSyncStatus: playlist.syncStatus || 'cached',
+    },
+    topics: playlist.topics,
   };
 }
 
@@ -358,7 +415,17 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
 
 app.get('/api/catalog', rateLimit(60 * 1000, 60), asyncRoute(async (_request, response) => {
   response.set('Cache-Control', 'private, max-age=300');
-  response.json(await hydratedCatalog());
+  response.json(await playlistCatalog());
+}));
+
+app.get('/api/catalog/topics/:videoId', rateLimit(60 * 1000, 30), asyncRoute(async (request, response) => {
+  const videoId = String(request.params.videoId || '');
+  if (!/^[\w-]{11}$/.test(videoId)) throw new HttpError(400, '无效的 YouTube 视频 ID。', 'invalid_video_id');
+  const catalog = await playlistCatalog();
+  const topic = catalog.topics.find((candidate) => candidate.videoId === videoId && candidate.serverManaged);
+  if (!topic) throw new HttpError(404, '该视频不在已配置的播放列表中。', 'topic_not_found');
+  response.set('Cache-Control', 'private, max-age=300');
+  response.json(await hydratedYouTubeTopic(topic));
 }));
 
 const authLimiter = rateLimit(15 * 60 * 1000, 30);

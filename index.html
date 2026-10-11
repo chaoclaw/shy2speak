@@ -8,7 +8,7 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=15" />
+    <link rel="stylesheet" href="./styles.css?v=17" />
   </head>
   <body>
     <div class="app-shell">
@@ -31,7 +31,7 @@
         <div class="sidebar-bottom">
           <button class="nav-item" data-view-link="settings"><span>⚙</span><b data-i18n="navSettings">设置</b></button>
           <div class="mini-profile">
-            <button class="avatar avatar-a" data-view-link="settings">LS</button>
+            <button class="avatar avatar-a" data-view-link="settings" aria-label="个人设置">LS</button>
             <div><strong id="sidebarNickname">LinSpeak</strong><small id="sidebarAccountState">本机学习档案</small></div>
             <button class="icon-btn" data-view-link="settings" aria-label="更多设置">•••</button>
           </div>
@@ -50,7 +50,7 @@
             <button class="compact-control icon-only" id="modeToggle" aria-label="切换到夜间模式" title="切换到夜间模式"><span id="modeIcon" aria-hidden="true">☼</span></button>
             <button class="icon-btn share-page" aria-label="分享当前页面">↗</button>
             <button class="icon-btn notification-btn" aria-label="通知">♢<i></i></button>
-            <button class="avatar avatar-a top-avatar" data-view-link="settings">LS</button>
+            <button class="avatar avatar-a top-avatar" data-view-link="settings" aria-label="个人设置">LS</button>
           </div>
         </header>
 
@@ -118,7 +118,7 @@
           <!-- Practice -->
           <section class="view" id="view-practice" data-title-zh="视频学习" data-title-en="Video practice">
             <div class="page-heading">
-              <div><span class="eyebrow" id="practiceTopicEyebrow">YOUTUBE · REAL CONTENT</span><h1 id="practiceTopicTitle">YouTube 英语口语练习</h1><p id="practiceChapterTitle">正在读取课程数据…</p></div>
+              <div><span class="eyebrow" id="practiceTopicEyebrow">YOUTUBE · REAL CONTENT</span><h1 id="practiceTopicTitle">Mall Vocabulary In English</h1><p class="topic-localized-title" id="practiceTopicLocalizedTitle">商场英语词汇</p><p id="practiceChapterTitle">正在读取课程数据…</p></div>
               <div class="button-row practice-heading-actions"><label class="topic-picker" for="topicSelect"><span>当前主题</span><select id="topicSelect" aria-label="选择视频主题"></select></label><button class="secondary-btn" id="importTopic">＋ 视频</button><button class="secondary-btn share-page">↗ 分享</button></div>
             </div>
 
@@ -358,8 +358,8 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=16"></script>
-    <script src="./backend.js?v=16"></script>
-    <script src="./app.js?v=16"></script>
+    <script src="./runtime-config.js?v=17"></script>
+    <script src="./backend.js?v=17"></script>
+    <script src="./app.js?v=17"></script>
   </body>
 </html>

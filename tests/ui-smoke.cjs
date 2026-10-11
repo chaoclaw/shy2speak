@@ -18,6 +18,16 @@ catalogFixture.topics[0].chapters = [
   },
   { id: 'chapter-02', index: 2, title: 'Pending section', titleZh: '待同步小节', start: 8, durationLabel: '待同步', previewWords: [], sentences: [] },
 ];
+catalogFixture.topics = Array.from({ length: 85 }, (_, index) => {
+  if (index === 0) return catalogFixture.topics[0];
+  const videoId = `TEST${String(index).padStart(7, '0')}`;
+  return {
+    id: `youtube-${videoId.toLowerCase()}`, provider: 'youtube', videoId, playlistId: catalogFixture.source.playlistId,
+    title: `English Lesson ${index + 1}`, localizedTitles: { en: `English Lesson ${index + 1}`, zh: `英语课程 ${index + 1}` },
+    channelTitle: 'Verified channel', thumbnail: `${origin}/icons/icon.svg`, transcriptOrigin: 'pending',
+    chapters: [{ id: 'chapter-01', index: 1, title: 'Full video', titleZh: '完整视频', start: 0, durationLabel: '待同步', previewWords: [], sentences: [] }],
+  };
+});
 const cloudState = {
   payload: {
     version: 1,
@@ -61,9 +71,16 @@ async function main() {
 
   await page.goto(`${origin}/#/practice`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
-  assert.equal(await page.locator('#topicSelect option').count(), 1, 'real catalog topic should render');
+  assert.equal(await page.locator('#topicSelect option').count(), 85, 'all 85 playlist topics should render');
+  assert.ok((await page.locator('#topicSelect option').first().textContent()).includes('商场英语词汇'), 'topic picker should show English and the current-language title');
   assert.equal(await page.locator('.chapters-card .chapter').count(), 2, 'catalog chapters should render');
   assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 2, 'server-synced sentence lyrics should render');
+
+  await page.locator('.side-nav .nav-item').first().hover();
+  await page.waitForSelector('#globalHoverToast.visible');
+  assert.equal(await page.locator('#globalHoverToast').textContent(), '学习概览', 'sidebar buttons should show hover guidance');
+  await page.locator('.top-actions .share-page').hover();
+  await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === '分享当前页面');
 
   const desktopLayout = await page.evaluate(() => {
     const video = document.querySelector('.practice-learning .video-card').getBoundingClientRect();
@@ -135,7 +152,7 @@ async function main() {
   await page.context().setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   assert.ok(await page.locator('#view-overview').isVisible(), 'PWA shell should reload offline');
-  assert.equal(await page.locator('#topicSelect option').count(), 1, 'course catalog should be cached offline');
+  assert.equal(await page.locator('#topicSelect option').count(), 85, 'complete course catalog should be cached offline');
   await page.context().setOffline(false);
 
   assert.deepEqual(errors, [], `browser console errors: ${errors.join(' | ')}`);
