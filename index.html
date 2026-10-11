@@ -8,7 +8,7 @@
     <title>Shy2Speak · 产品原型</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=2" />
+    <link rel="stylesheet" href="./styles.css?v=3" />
   </head>
   <body>
     <div class="app-shell">
@@ -47,7 +47,7 @@
           </div>
           <div class="top-actions">
             <button class="compact-control" id="languageToggle" aria-label="切换界面语言">中 / EN</button>
-            <button class="compact-control" id="modeToggle" aria-label="切换日间夜间模式"><span id="modeIcon">☼</span><span class="control-label">日间</span></button>
+            <button class="compact-control icon-only" id="modeToggle" aria-label="切换到夜间模式" title="切换到夜间模式"><span id="modeIcon" aria-hidden="true">☼</span></button>
             <button class="icon-btn share-page" aria-label="分享当前页面">↗</button>
             <button class="icon-btn notification-btn" aria-label="通知">♢<i></i></button>
             <button class="avatar avatar-a top-avatar" data-view-link="settings">LS</button>
@@ -342,6 +342,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=2"></script>
+    <script src="./app.js?v=3"></script>
   </body>
 </html>

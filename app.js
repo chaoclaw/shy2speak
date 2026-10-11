@@ -51,7 +51,9 @@ function applyAppearance() {
   document.documentElement.dataset.mode = resolvedMode;
   document.documentElement.dataset.theme = state.theme;
   $('#modeIcon').textContent = resolvedMode === 'dark' ? '☾' : '☼';
-  $('.control-label').textContent = resolvedMode === 'dark' ? '夜间' : '日间';
+  const modeToggleLabel = resolvedMode === 'dark' ? '切换到日间模式' : '切换到夜间模式';
+  $('#modeToggle').setAttribute('aria-label', modeToggleLabel);
+  $('#modeToggle').title = modeToggleLabel;
   const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
   $('meta[name="theme-color"]').setAttribute('content', themeColor);
   $$('.mode-choices button').forEach((button) => button.classList.toggle('active', button.dataset.modeChoice === state.mode));
