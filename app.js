@@ -252,6 +252,7 @@ function captionStatus(topic) {
   const origin = topic?.transcriptOrigin || 'pending';
   if (origin === 'youtube-manual-captions' || origin === 'official-captions') return { label: 'YouTube 人工字幕', detail: '公开视频字幕', verified: true };
   if (origin === 'youtube-auto-captions') return { label: 'YouTube 自动字幕', detail: '自动字幕 · 已同步时间轴', verified: true };
+  if (origin === 'youtube-public-captions') return { label: 'YouTube 公开字幕', detail: '真实字幕 · NAS 已同步时间轴', verified: true };
   if (origin === 'curated-sample') return { label: '练习稿 · 待核对', detail: '练习稿待核对', verified: false };
   return { label: '字幕待同步', detail: '字幕待同步', verified: false };
 }
@@ -415,9 +416,24 @@ function createFallbackChapter() {
 
 async function loadCatalog() {
   try {
-    const response = await fetch('./data/catalog.json?v=15', { cache: 'no-cache' });
-    if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
-    const catalog = await response.json();
+    const apiBase = String(window.__SHY2SPEAK_CONFIG__?.apiBase || '').replace(/\/+$/, '');
+    let catalog = null;
+    if (apiBase) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
+      try {
+        const response = await fetch(`${apiBase}/catalog`, { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error(`NAS catalog HTTP ${response.status}`);
+        catalog = await response.json();
+      } catch (error) {
+        console.warn('NAS caption catalog unavailable; using static catalog.', error.message);
+      } finally { clearTimeout(timeout); }
+    }
+    if (!catalog) {
+      const response = await fetch('./data/catalog.json?v=16', { cache: 'no-cache' });
+      if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
+      catalog = await response.json();
+    }
     if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
     const customTopics = readStoredJSON(STORAGE_KEYS.customTopics, []);
     state.catalog = { ...catalog, topics: [...catalog.topics, ...customTopics] };
@@ -443,7 +459,7 @@ function applyTopicMetadataToUI(topic) {
   $('#practiceChapterTitle').textContent = chapter ? `Chapter ${String(chapter.index).padStart(2, '0')} · ${chapter.title}` : '尚未同步章节与字幕';
   $('#videoSourceLabel').textContent = topic.channelTitle && topic.channelTitle !== '等待 YouTube 元数据' ? topic.channelTitle : '通过官方播放器加载';
   const poster = $('#youtubePoster');
-  if (topic.metadataStatus === 'live') poster.src = topic.thumbnail || `https://i.ytimg.com/vi/${topic.videoId}/hqdefault.jpg`;
+  if (topic.metadataStatus === 'live' || topic.metadataStatus === 'server-synced-public-metadata') poster.src = topic.thumbnail || `https://i.ytimg.com/vi/${topic.videoId}/hqdefault.jpg`;
   else poster.removeAttribute('src');
   poster.onerror = () => poster.removeAttribute('src');
   $('#videoStage').dataset.videoId = topic.videoId;

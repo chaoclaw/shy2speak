@@ -16,13 +16,15 @@ for (const route of ['/api/auth/register', '/api/auth/login', '/api/auth/refresh
 for (const api of ['saveProfile', 'checkNickname', 'pushLearningState', 'pullLearningState', 'resetPasswordWithCode']) {
   assert.match(browserAdapter, new RegExp(`\\b${api}\\b`), `missing browser backend capability: ${api}`);
 }
-for (const table of ['users', 'profiles', 'refresh_sessions', 'one_time_codes', 'learning_states', 'practice_snapshots']) {
+for (const table of ['users', 'profiles', 'refresh_sessions', 'one_time_codes', 'learning_states', 'practice_snapshots', 'youtube_catalog_cache']) {
   assert.match(schema, new RegExp(`create table if not exists ${table}`), `missing PostgreSQL table: ${table}`);
 }
 assert.match(schema, /nickname citext not null unique/, 'nickname must be globally unique, case-insensitively');
 assert.match(server, /scrypt/, 'passwords must use a memory-hard hash');
 assert.match(server, /timingSafeEqual/, 'credential comparisons must be timing safe');
 assert.match(server, /token_hash/, 'refresh tokens must be stored as hashes');
+assert.match(server, /\/api\/catalog/, 'NAS API must expose its hydrated caption catalog');
+assert.match(server, /fetchYouTubeTopic/, 'NAS API must sync public YouTube captions server-side');
 assert.match(compose, /postgres:17-alpine/, 'UGREEN compose must include PostgreSQL');
 assert.match(compose, /ghcr\.io\/chaoclaw\/shy2speak:edge/, 'UGREEN compose must use the published image');
 assert.doesNotMatch(compose, /\$\{/, 'UGREEN compose must not require external environment interpolation');

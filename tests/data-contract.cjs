@@ -8,6 +8,9 @@ const catalog = JSON.parse(fs.readFileSync(path.join(root, 'data/catalog.json'),
 assert.equal(catalog.schemaVersion, 1, 'catalog schemaVersion must be 1');
 assert.match(catalog.source.playlistId, /^PL[\w-]+$/, 'playlist id is invalid');
 assert.ok(catalog.topics.length > 0, 'at least one topic is required');
+assert.equal(catalog.topics[0].videoId, 'VFe7Ap1kfk0', 'the requested first YouTube video must be the default topic');
+assert.equal(catalog.topics[0].playlistId, 'PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ', 'the requested playlist must remain configured');
+assert.ok(catalog.topics.every((topic) => topic.transcriptOrigin !== 'curated-sample'), 'unverified sample copy must not be presented as video captions');
 
 const topicIds = new Set();
 for (const topic of catalog.topics) {

@@ -6,17 +6,22 @@ import { promisify } from 'node:util';
 import express from 'express';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
+import { fetchYouTubeTopic } from './youtube-catalog.js';
 
 const { Pool } = pg;
 const scrypt = promisify(crypto.scrypt);
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(serverDirectory, '..');
+const catalogPath = path.join(publicDirectory, 'data', 'catalog.json');
 const PORT = Number(process.env.PORT || 8080);
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const AUTH_SECRET = process.env.AUTH_SECRET || '';
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
+const YOUTUBE_CAPTIONS_ENABLED = process.env.YOUTUBE_CAPTIONS_ENABLED !== 'false';
+const captionCacheHours = Number(process.env.YOUTUBE_CAPTION_CACHE_HOURS || 168);
+const YOUTUBE_CAPTION_CACHE_HOURS = Number.isFinite(captionCacheHours) ? Math.max(1, captionCacheHours) : 168;
 
 if (!DATABASE_URL && !process.env.PGHOST) throw new Error('DATABASE_URL or PostgreSQL PG* variables are required');
 if (AUTH_SECRET.length < 32) throw new Error('AUTH_SECRET must contain at least 32 characters');
@@ -249,6 +254,62 @@ function snapshotsFromPayload(payload) {
   return rows.slice(0, 5000);
 }
 
+const captionSyncPromises = new Map();
+const captionFailureCooldowns = new Map();
+
+async function baseCatalog() {
+  const contents = await fs.readFile(catalogPath, 'utf8');
+  const catalog = JSON.parse(contents);
+  if (!Array.isArray(catalog.topics)) throw new Error('Course catalog topics are missing');
+  return catalog;
+}
+
+async function hydratedYouTubeTopic(topic) {
+  if (topic.provider !== 'youtube' || !topic.videoId) return topic;
+  const cachedResult = await pool.query(
+    'select payload, expires_at from youtube_catalog_cache where video_id = $1',
+    [topic.videoId],
+  );
+  const cached = cachedResult.rows[0];
+  if (cached && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
+  if (!YOUTUBE_CAPTIONS_ENABLED || Number(captionFailureCooldowns.get(topic.videoId) || 0) > Date.now()) {
+    return cached?.payload || topic;
+  }
+  if (captionSyncPromises.has(topic.videoId)) return captionSyncPromises.get(topic.videoId);
+
+  const sync = (async () => {
+    try {
+      const payload = await fetchYouTubeTopic(topic);
+      await pool.query(
+        'insert into youtube_catalog_cache(video_id, payload, fetched_at, expires_at) values ($1, $2, now(), now() + ($3::text || \' hours\')::interval) on conflict (video_id) do update set payload = excluded.payload, fetched_at = excluded.fetched_at, expires_at = excluded.expires_at',
+        [topic.videoId, payload, String(YOUTUBE_CAPTION_CACHE_HOURS)],
+      );
+      captionFailureCooldowns.delete(topic.videoId);
+      console.log('YouTube captions synced:', topic.videoId, payload.chapters.reduce((sum, chapter) => sum + chapter.sentences.length, 0), 'sentences');
+      return payload;
+    } catch (error) {
+      captionFailureCooldowns.set(topic.videoId, Date.now() + 10 * 60 * 1000);
+      console.warn('YouTube caption sync unavailable:', topic.videoId, error.message);
+      return cached?.payload || { ...topic, transcriptOrigin: 'pending', transcriptSyncStatus: 'temporarily-unavailable' };
+    } finally {
+      captionSyncPromises.delete(topic.videoId);
+    }
+  })();
+  captionSyncPromises.set(topic.videoId, sync);
+  return sync;
+}
+
+async function hydratedCatalog() {
+  const catalog = await baseCatalog();
+  const topics = await Promise.all(catalog.topics.map(hydratedYouTubeTopic));
+  return {
+    ...catalog,
+    updatedAt: new Date().toISOString(),
+    source: { ...catalog.source, captionRuntime: 'NAS server public YouTube captions with PostgreSQL cache' },
+    topics,
+  };
+}
+
 async function migrate() {
   const sql = await fs.readFile(path.join(serverDirectory, 'migrations', '001_init.sql'), 'utf8');
   for (let attempt = 1; attempt <= 30; attempt += 1) {
@@ -293,6 +354,11 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
+}));
+
+app.get('/api/catalog', rateLimit(60 * 1000, 60), asyncRoute(async (_request, response) => {
+  response.set('Cache-Control', 'private, max-age=300');
+  response.json(await hydratedCatalog());
 }));
 
 const authLimiter = rateLimit(15 * 60 * 1000, 30);

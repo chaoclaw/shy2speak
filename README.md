@@ -41,11 +41,13 @@ ghcr.io/chaoclaw/shy2speak:edge
 1. 打开 `compose.ugreen.yml`，分别将文件顶部的 `CHANGE_ME_DATABASE_PASSWORD` 和 `CHANGE_ME_WITH_RANDOM_AUTH_SECRET_AT_LEAST_32_CHARS` 替换为两组不同的随机值；可分别执行一次 `openssl rand -hex 32` 生成。
 2. 在绿联 Docker 中新建 Compose 项目，粘贴修改后的完整文件；不需要再配置项目环境变量。端口默认是 `8080`，如有冲突只修改 `ports` 中冒号左侧的数字。
 3. 启动项目，等待 `database` 变为 healthy、`app` 变为 running。
-4. 打开 `http://NAS局域网IP:8080`；Docker 页面部署会自动使用同源 API，无需再填写数据库地址或浏览器密钥。
+4. 打开已配置的 `https://NAS域名`；Docker 页面部署会自动使用同源 API，无需再填写数据库地址或浏览器密钥。
 
 请勿把已经填写真实密码和密钥的副本提交到 Git；仓库只保存占位符模板。
 
 浏览器麦克风与完整 PWA 安装要求安全上下文。局域网首次检查可使用 HTTP；正式使用录音时，请在绿联反向代理中为该容器配置 HTTPS 域名和证书。
+
+首次打开“视频学习”时，NAS 会在服务端读取课程中 YouTube 视频的公开英语字幕，按句切分时间轴，并将结果缓存到 PostgreSQL 7 天。若视频描述包含 `0:00 标题` 形式的章节时间戳，也会自动拆分为对应小节。静态预览不会使用虚构示例句；YouTube 暂时不可达或视频没有公开英语字幕时，会明确显示“字幕待同步”。
 
 如 GHCR 镜像尚未设为公开，需在绿联镜像仓库中登录 `ghcr.io`，或把本仓库克隆到 NAS 后使用 `compose.yml` 本地构建。
 
@@ -74,6 +76,7 @@ docker compose -f compose.ugreen.yml exec -T database pg_dump -U shy2speak shy2s
 ## 数据与服务边界
 
 - 视频使用 `youtube-nocookie.com` 官方嵌入播放器，不重新分发受版权保护的视频或音频。
+- 公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`，只读取公开视频页面提供的字幕轨道，不下载视频或音频。
 - `data/catalog.json` 保存课程结构。逐句稿会标记来源；未获得公开视频字幕时仍显示“待核对”，不会冒充准确字幕。
 - 麦克风录音使用浏览器 `MediaRecorder`。只有配置真实评分端点并返回完整评分后，才保存 AI 分数。
 - AI Key 只保存在当前浏览器标签页；生产环境后续可把指定厂商调用迁移到 NAS API 代理。

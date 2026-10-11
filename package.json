@@ -9,13 +9,14 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "check": "node --check app.js && node --check backend.js && node --check server/index.js",
-    "test": "node tests/data-contract.cjs && node tests/backend-contract.cjs && node tests/ui-smoke.cjs",
+    "check": "node --check app.js && node --check backend.js && node --check server/index.js && node --check server/youtube-catalog.js",
+    "test": "node tests/data-contract.cjs && node tests/backend-contract.cjs && node tests/youtube-catalog.mjs && node tests/ui-smoke.cjs",
     "test:api": "node tests/api-integration.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
     "nodemailer": "^10.1.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "youtube-caption-extractor": "^1.10.2"
   }
 }

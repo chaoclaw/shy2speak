@@ -36,6 +36,8 @@ services:
       AUTH_SECRET: *auth-secret
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_DAYS: "30"
+      YOUTUBE_CAPTIONS_ENABLED: "true"
+      YOUTUBE_CAPTION_CACHE_HOURS: "168"
       TRUST_PROXY: "false"
       ALLOWED_ORIGINS: ""
       SMTP_HOST: ""

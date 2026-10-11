@@ -67,3 +67,11 @@ create table if not exists practice_snapshots (
   updated_at timestamptz not null default now(),
   primary key (user_id, scope_type, scope_id)
 );
+
+create table if not exists youtube_catalog_cache (
+  video_id text primary key check (video_id ~ '^[A-Za-z0-9_-]{11}$'),
+  payload jsonb not null,
+  fetched_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists youtube_catalog_cache_expiry_idx on youtube_catalog_cache(expires_at);

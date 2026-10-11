@@ -1,9 +1,23 @@
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const { chromium } = require('playwright');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const port = 4174;
 const origin = `http://127.0.0.1:${port}`;
+const catalogFixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'catalog.json'), 'utf8'));
+catalogFixture.topics[0].transcriptOrigin = 'youtube-public-captions';
+catalogFixture.topics[0].chapters = [
+  {
+    id: 'chapter-01', index: 1, title: 'Verified captions', titleZh: '已验证字幕', start: 0, durationLabel: '0:08', previewWords: ['welcome'],
+    sentences: [
+      { id: 'sentence-001', start: 0, end: 3.5, en: 'Welcome to this verified test lesson.', zh: '欢迎来到已验证的测试课程。', words: ['welcome'] },
+      { id: 'sentence-002', start: 3.5, end: 8, en: 'Repeat this sentence clearly.', zh: '请清晰地跟读这句话。', words: [] },
+    ],
+  },
+  { id: 'chapter-02', index: 2, title: 'Pending section', titleZh: '待同步小节', start: 8, durationLabel: '待同步', previewWords: [], sentences: [] },
+];
 const cloudState = {
   payload: {
     version: 1,
@@ -32,6 +46,7 @@ async function main() {
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
   await page.route('**/*', async (route) => {
     const url = route.request().url();
+    if (url.includes('/data/catalog.json')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(catalogFixture) });
     if (url.includes('youtube.com/oembed')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'Live YouTube lesson', author_name: 'Verified channel', thumbnail_url: `${origin}/icons/icon.svg` }) });
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
@@ -48,7 +63,7 @@ async function main() {
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
   assert.equal(await page.locator('#topicSelect option').count(), 1, 'real catalog topic should render');
   assert.equal(await page.locator('.chapters-card .chapter').count(), 2, 'catalog chapters should render');
-  assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 5, 'sentence lyrics should render');
+  assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 2, 'server-synced sentence lyrics should render');
 
   const desktopLayout = await page.evaluate(() => {
     const video = document.querySelector('.practice-learning .video-card').getBoundingClientRect();
