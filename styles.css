@@ -312,7 +312,33 @@ mark { background:var(--amber-soft); color:inherit; padding:1px 3px; border-radi
   .mobile-nav { position:fixed; z-index:50; display:grid; grid-template-columns:repeat(5,1fr); inset:auto 0 0; min-height:64px; padding:6px max(8px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); background:color-mix(in srgb,var(--surface) 94%,transparent); backdrop-filter:blur(18px); border-top:1px solid var(--border); }.mobile-nav button { border:0; background:transparent; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:2px; font-size:15px; }.mobile-nav small { font-size:8px; }.mobile-nav button.active { color:var(--primary); }
   .page-heading { align-items:flex-start; flex-direction:column; margin-bottom:17px; }.page-heading h1 { font-size:24px; }.page-heading > .button-row { width:100%; }.page-heading > .button-row > button { flex:1; }
   .hero-grid,.dashboard-grid,.course-row { grid-template-columns:1fr; }.welcome-card { min-height:auto; padding:24px; flex-direction:column; align-items:flex-start; gap:20px; }.welcome-copy h1 { font-size:23px; }.goal-ring { --size:120px; position:absolute; right:-18px; bottom:-25px; opacity:.32; }.goal-ring:before { width:88px; height:88px; }.goal-ring div { display:none; }.focus-card { min-height:0; }.focus-card .focus-word { padding:18px 0 16px; }.focus-card .mini-progress { flex:0 0 6px; }.focus-card .primary-btn { flex:0 0 42px; margin-top:16px; }.metric-grid { grid-template-columns:1fr 1fr; gap:9px; }.metric-card { min-height:100px; padding:14px; align-items:flex-start; }.metric-card .metric-icon { width:34px; height:34px; }.metric-card > div { display:flex; flex-direction:column; }.metric-card strong { font-size:19px; }.metric-card em { margin-top:2px; }.chart-card,.skill-card { min-height:auto; }.course-row { gap:11px; }.achievement-card { grid-column:auto; }
-  .practice-left { grid-template-columns:1fr; }.video-stage { min-height:0; }.practice-layout { gap:12px; }.chapters-card { padding:14px; }.chapter span { grid-template-columns:85px 1fr; }.lyrics-list { max-height:390px; }.score-grid { grid-template-columns:1fr 1fr; }.score-grid > div { border-bottom:1px solid var(--border); }.score-grid > div:nth-child(2) { border-right:0; }.history-labels { gap:8px; }.mic-stack { min-width:190px; }.record-panel { gap:15px; }
+  #view-practice > .page-heading { gap:12px; margin-bottom:12px; }
+  #view-practice .practice-layout { display:flex; flex-direction:column; align-items:stretch; gap:12px; }
+  #view-practice .practice-left,#view-practice .practice-right { display:contents; }
+  #view-practice .chapters-card { order:1; padding:14px; }
+  #view-practice .preview-card { order:2; padding:14px; }
+  #view-practice .video-card { order:3; }
+  #view-practice .lyrics-card { order:4; }
+  #view-practice .score-card { order:5; }
+  #view-practice .history-card { order:6; }
+  #view-practice .chapter { min-height:44px; padding:7px 8px; }
+  #view-practice .chapter span { grid-template-columns:82px 1fr; }
+  #view-practice .preview-card > div { min-width:0; }
+  #view-practice .preview-card .metric-icon { width:36px; height:36px; }
+  #view-practice .preview-card h3 { font-size:13px; }
+  #view-practice .preview-card p { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #view-practice .preview-card .secondary-btn { flex:0 0 auto; min-height:36px; padding:0 11px; font-size:10px; }
+  #view-practice .video-stage { min-height:0; }
+  #view-practice .lyrics-toolbar { min-height:50px; padding:8px 10px; }
+  #view-practice .lyrics-toolbar .segmented { min-width:0; overflow-x:auto; }
+  #view-practice .lyrics-toolbar .segmented button { padding:0 8px; }
+  #view-practice .lyrics-list { max-height:180px; padding:6px 8px; }
+  #view-practice .lyric-line { padding:9px 7px; gap:7px; }
+  #view-practice .record-panel { min-height:102px; gap:13px; padding:8px; }
+  #view-practice .mic-stack { min-width:150px; }
+  #view-practice .record-button { width:54px; height:54px; border-width:6px; font-size:18px; }
+  #view-practice .round-control { width:36px; height:36px; }
+  .score-grid { grid-template-columns:1fr 1fr; }.score-grid > div { border-bottom:1px solid var(--border); }.score-grid > div:nth-child(2) { border-right:0; }.history-labels { gap:8px; }
   .cleanup-banner { align-items:flex-start; flex-direction:column; }.vocab-preference { align-items:stretch; flex-direction:column; gap:12px; }.vocab-preference select { width:100%; min-width:0; }.vocab-toolbar { align-items:stretch; flex-direction:column; }.vocab-toolbar select,.filter-btn { width:100%; }.vocab-layout { grid-template-columns:1fr; }.word-list { position:static; display:flex; overflow:auto; padding:7px; }.word-list-item { min-width:210px; }.word-detail { padding:18px; }.word-detail-head { flex-direction:column; }.example { padding-right:14px; }.example button { position:static; transform:none; margin-top:8px; }.family-links { flex-wrap:nowrap; overflow:auto; }
   .listening-layout { grid-template-columns:1fr; }.playlist-panel,.audio-player,.listening-lyrics { min-height:auto; }.playlist-panel { max-height:330px; overflow:auto; }.audio-player { min-height:570px; }.listening-lyrics { grid-column:auto; min-height:570px; }.stacked-mobile { flex-wrap:wrap; }.listening-lines { padding:18px 13px; }.timeline-adjust { grid-template-columns:1fr auto; }.timeline-adjust input { grid-column:1/-1; grid-row:2; }
   .storage-card { grid-template-columns:1fr auto; gap:13px; }.storage-bar { grid-column:1/-1; grid-row:2; }.downloads-toolbar { align-items:stretch; flex-direction:column; gap:9px; }.downloads-toolbar .segmented { overflow:auto; }.search-box.small { flex:auto; }.download-list { background:transparent; border:0; box-shadow:none; display:grid; gap:10px; }.download-header { display:none; }.download-row { position:relative; grid-template-columns:1fr auto; gap:7px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:14px; }.download-row > span { grid-column:1; margin-left:80px; }.download-row > div:last-child { grid-column:2; grid-row:1; }.download-name { grid-column:1/-1; grid-template-columns:18px 52px 1fr; }.download-row .status { grid-column:1; margin-left:80px; }
