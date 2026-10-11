@@ -8,7 +8,7 @@
     <title>Shy2Speak · 产品原型</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <div class="app-shell">
@@ -331,7 +331,11 @@
         </div>
 
         <nav class="mobile-nav" aria-label="移动端导航">
-          <button class="active" data-view-link="overview"><span>⌂</span><small>概览</small></button><button data-view-link="practice"><span>▶</span><small>学习</small></button><button data-view-link="vocabulary"><span>◇</span><small>生词本</small></button><button data-view-link="listening"><span>♪</span><small>磨耳朵</small></button><button data-view-link="settings"><span>•••</span><small>更多</small></button>
+          <button class="active" data-view-link="overview" aria-label="学习概览"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M9.5 20v-6h5v6"/></svg></span><small>概览</small></button>
+          <button data-view-link="practice" aria-label="视频学习"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5z"/></svg></span><small>学习</small></button>
+          <button data-view-link="vocabulary" aria-label="生词本"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5z"/><path d="M5 5.5v16M9 7h6"/></svg></span><small>生词本</small></button>
+          <button data-view-link="listening" aria-label="磨耳朵"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><path d="M4 13h3v7H5.5A1.5 1.5 0 0 1 4 18.5zm16 0h-3v7h1.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg></span><small>磨耳朵</small></button>
+          <button data-view-link="settings" aria-label="更多设置"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg></span><small>更多</small></button>
         </nav>
       </main>
     </div>
@@ -346,6 +350,6 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=8"></script>
+    <script src="./app.js?v=9"></script>
   </body>
 </html>
