@@ -1,5 +1,5 @@
-const CACHE = 'shy2speak-app-v14';
-const APP_SHELL = ['./', './index.html', './styles.css?v=14', './runtime-config.js?v=14', './backend.js?v=14', './app.js?v=14', './data/catalog.json?v=14', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'shy2speak-app-v15';
+const APP_SHELL = ['./', './index.html', './styles.css?v=15', './runtime-config.js?v=15', './backend.js?v=15', './app.js?v=15', './data/catalog.json?v=15', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -14,6 +14,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.pathname.includes('/api/')) return;
   if (url.pathname.endsWith('/runtime-config.js')) {
     event.respondWith(fetch(event.request).then((response) => {
       const copy = response.clone();

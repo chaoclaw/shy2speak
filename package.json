@@ -1,0 +1,21 @@
+{
+  "name": "shy2speak",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted English speaking practice PWA",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "check": "node --check app.js && node --check backend.js && node --check server/index.js",
+    "test": "node tests/data-contract.cjs && node tests/backend-contract.cjs && node tests/ui-smoke.cjs",
+    "test:api": "node tests/api-integration.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "nodemailer": "^10.1.0",
+    "pg": "^8.16.3"
+  }
+}

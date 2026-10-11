@@ -3,24 +3,30 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const backend = fs.readFileSync(path.join(root, 'backend.js'), 'utf8');
-const schema = fs.readFileSync(path.join(root, 'supabase/schema.sql'), 'utf8');
-const workflow = fs.readFileSync(path.join(root, '.github/workflows/pages.yml'), 'utf8');
+const browserAdapter = fs.readFileSync(path.join(root, 'backend.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server/index.js'), 'utf8');
+const schema = fs.readFileSync(path.join(root, 'server/migrations/001_init.sql'), 'utf8');
+const compose = fs.readFileSync(path.join(root, 'compose.ugreen.yml'), 'utf8');
+const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker.yml'), 'utf8');
 
-for (const route of ['/auth/v1/signup', '/auth/v1/token?grant_type=password', '/auth/v1/otp', '/auth/v1/verify', '/auth/v1/recover', '/auth/v1/logout']) {
-  assert.ok(backend.includes(route), `missing real auth route: ${route}`);
+for (const route of ['/api/auth/register', '/api/auth/login', '/api/auth/refresh', '/api/auth/otp', '/api/auth/verify-otp', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/logout']) {
+  assert.ok(server.includes(route), `missing self-hosted auth route: ${route}`);
 }
-for (const api of ['saveProfile', 'checkNickname', 'pushLearningState', 'pullLearningState']) {
-  assert.match(backend, new RegExp(`\\b${api}\\b`), `missing backend capability: ${api}`);
+for (const api of ['saveProfile', 'checkNickname', 'pushLearningState', 'pullLearningState', 'resetPasswordWithCode']) {
+  assert.match(browserAdapter, new RegExp(`\\b${api}\\b`), `missing browser backend capability: ${api}`);
 }
-for (const table of ['profiles', 'learning_states', 'practice_snapshots']) {
-  assert.match(schema, new RegExp(`create table if not exists public\\.${table}`), `missing table: ${table}`);
-  assert.match(schema, new RegExp(`alter table public\\.${table} enable row level security`), `RLS must be enabled for ${table}`);
+for (const table of ['users', 'profiles', 'refresh_sessions', 'one_time_codes', 'learning_states', 'practice_snapshots']) {
+  assert.match(schema, new RegExp(`create table if not exists ${table}`), `missing PostgreSQL table: ${table}`);
 }
 assert.match(schema, /nickname citext not null unique/, 'nickname must be globally unique, case-insensitively');
-assert.match(schema, /save_my_profile/, 'profile save RPC must exist');
-assert.match(workflow, /vars\.SUPABASE_URL/, 'deployment must support a public Supabase URL variable');
-assert.match(workflow, /vars\.SUPABASE_PUBLISHABLE_KEY/, 'deployment must support a public publishable key variable');
-assert.doesNotMatch(backend, /service_role/i, 'browser adapter must not request a service-role key');
+assert.match(server, /scrypt/, 'passwords must use a memory-hard hash');
+assert.match(server, /timingSafeEqual/, 'credential comparisons must be timing safe');
+assert.match(server, /token_hash/, 'refresh tokens must be stored as hashes');
+assert.match(compose, /postgres:17-alpine/, 'UGREEN compose must include PostgreSQL');
+assert.match(compose, /ghcr\.io\/chaoclaw\/shy2speak:edge/, 'UGREEN compose must use the published image');
+assert.match(dockerfile, /USER node/, 'application image must run as a non-root user');
+assert.match(workflow, /linux\/amd64,linux\/arm64/, 'image workflow must publish both common NAS architectures');
+assert.doesNotMatch(browserAdapter, /supabase/i, 'browser backend must not depend on Supabase');
 
-console.log('backend-contract: auth, unique profile, RLS learning sync and Pages runtime config valid');
+console.log('backend-contract: self-hosted auth, PostgreSQL sync and multi-architecture NAS image valid');

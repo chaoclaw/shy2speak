@@ -90,7 +90,7 @@ function updateAccountUI() {
   if (!backend.configured) {
     $('#backendStatus').textContent = '未连接'; $('#backendStatus').className = 'status warning';
     $('#accountIdentity').textContent = '离线学习模式';
-    $('#accountServiceMeta').textContent = '本机数据正常可用；配置现有 Supabase 项目后可跨设备同步';
+    $('#accountServiceMeta').textContent = '本机数据正常可用；连接绿联 NAS 后可跨设备同步';
     $('#sidebarAccountState').textContent = '本机学习档案';
     $('#configureBackend').textContent = '配置连接';
     $('#authPreview').textContent = '连接账号服务'; $('#accountAction').textContent = '连接后登录';
@@ -103,7 +103,7 @@ function updateAccountUI() {
   $('#accountAction').disabled = false;
   if (!session) {
     $('#backendStatus').textContent = '服务已配置'; $('#backendStatus').className = 'status success';
-    $('#accountIdentity').textContent = '尚未登录'; $('#accountServiceMeta').textContent = `${backend.url} · Supabase`;
+    $('#accountIdentity').textContent = '尚未登录'; $('#accountServiceMeta').textContent = `${backend.url} · PostgreSQL 自托管`;
     $('#sidebarAccountState').textContent = '本机学习档案';
     $('#authPreview').textContent = '登录 / 注册'; $('#accountAction').textContent = '登录 / 注册';
     $('#accountSignOut').classList.add('hidden');
@@ -113,10 +113,10 @@ function updateAccountUI() {
   }
   $('#backendStatus').textContent = '已登录'; $('#backendStatus').className = 'status success';
   $('#accountIdentity').textContent = identity || '已认证用户'; $('#accountServiceMeta').textContent = `${backend.url} · 安全会话已建立`;
-  $('#sidebarAccountState').textContent = '云端同步账号';
+  $('#sidebarAccountState').textContent = '局域网同步账号';
   $('#authPreview').textContent = '账号已登录'; $('#accountAction').textContent = '立即同步';
   $('#accountSignOut').classList.remove('hidden');
-  $('#profileStorageStatus').textContent = '云端同步'; $('#profileStorageStatus').className = 'status success';
+  $('#profileStorageStatus').textContent = 'NAS 同步'; $('#profileStorageStatus').className = 'status success';
   const sync = readStoredJSON(STORAGE_KEYS.sync, {});
   setSyncMessage(sync.lastSyncedAt ? '学习记录已同步' : '准备首次同步', sync.lastSyncedAt ? `最近同步：${new Date(sync.lastSyncedAt).toLocaleString()}` : '本机数据将安全上传到当前账号', sync.lastSyncedAt ? 'success' : 'working');
 }
@@ -138,7 +138,7 @@ function scheduleCloudSync(delay = 1200) {
   if (!state.accountReady || !state.authSession || !window.shyBackend?.isConfigured()) return;
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(() => syncCloudState().catch((error) => {
-    setSyncMessage('云同步暂时中断', `${error.message} · 本机数据未受影响`);
+    setSyncMessage('NAS 同步暂时中断', `${error.message} · 本机数据未受影响`);
   }), delay);
 }
 
@@ -155,7 +155,7 @@ async function syncCloudState(showSuccess = false) {
 
 async function reconcileCloudState() {
   if (!state.authSession) return;
-  setSyncMessage('正在检查云端记录', '将保留更新时间较新的学习数据', 'working');
+  setSyncMessage('正在检查 NAS 记录', '将保留更新时间较新的学习数据', 'working');
   const remote = await shyBackend.pullLearningState();
   const remotePayload = remote?.payload;
   const localUpdated = Date.parse(analytics.data.updatedAt || 0) || 0;
@@ -178,7 +178,7 @@ async function reconcileCloudState() {
     const preferenceStorage = { mode: 'shy-mode', theme: 'shy-theme', language: 'shy-language', definitionLanguage: 'shy-definition-language' };
     Object.keys(preferenceStorage).forEach((key) => { if (preferences[key]) { state[key] = preferences[key]; localStorage.setItem(preferenceStorage[key], preferences[key]); } });
     applyAppearance(); applyLanguage(); updateProfileChrome(); renderAnalyticsOverview();
-    setSyncMessage('已恢复云端学习记录', `云端更新于 ${new Date(remoteUpdated).toLocaleString()}`, 'success');
+    setSyncMessage('已恢复 NAS 学习记录', `NAS 更新于 ${new Date(remoteUpdated).toLocaleString()}`, 'success');
   } else await syncCloudState(false);
 }
 
@@ -415,7 +415,7 @@ function createFallbackChapter() {
 
 async function loadCatalog() {
   try {
-    const response = await fetch('./data/catalog.json?v=14', { cache: 'no-cache' });
+    const response = await fetch('./data/catalog.json?v=15', { cache: 'no-cache' });
     if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
     const catalog = await response.json();
     if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
@@ -1318,6 +1318,8 @@ function friendlyAccountError(error) {
   if (/email not confirmed/i.test(message)) return '邮箱尚未验证，请先打开验证邮件。';
   if (/user already registered/i.test(message)) return '该账号已经注册，请直接登录。';
   if (/nickname already exists|duplicate key/i.test(message)) return '这个昵称已被使用，请换一个。';
+  if (/SMTP/i.test(message)) return 'NAS 尚未配置邮件服务，请先在 Compose 中填写 SMTP 设置。';
+  if (/短信服务/.test(message)) return 'NAS 尚未配置短信服务。';
   if (/failed to fetch|network/i.test(message)) return '无法连接账号服务，请检查网络与服务地址。';
   return message;
 }
@@ -1325,14 +1327,14 @@ function friendlyAccountError(error) {
 function openBackendConfig() {
   const backend = shyBackend.getConfig();
   showModal({
-    eyebrow: 'ACCOUNT SERVICE', title: backend.configured ? '账号服务连接设置' : '连接现有账号服务',
-    body: `<div class="status-banner"><span>SUPABASE</span><p><strong>后端方案已确定</strong><small>这里只填写现有项目的连接信息，不再选择后端类型。Publishable Key 可安全用于浏览器；请勿填写 service_role。</small></p></div><div class="modal-field"><label for="backendUrl">Project URL</label><input id="backendUrl" inputmode="url" value="${escapeHTML(backend.url || '')}" placeholder="https://your-project.supabase.co"></div><div class="modal-field"><label for="backendKey">Publishable Key</label><input id="backendKey" type="password" autocomplete="off" placeholder="${backend.configured ? '留空以保留当前 Key' : 'sb_publishable_… 或 anon key'}"></div><div class="warning-box"><span>✓</span><p><strong>配置后会执行真实健康检查</strong><br><small>数据库需先运行仓库中的 supabase/schema.sql；学习记录在未连接时始终保留在本机。</small></p></div>`,
+    eyebrow: 'SELF-HOSTED SERVICE', title: backend.configured ? '局域网服务连接设置' : '连接绿联 NAS',
+    body: `<div class="status-banner"><span>NAS</span><p><strong>PostgreSQL 自托管服务</strong><small>Docker 版本会自动使用同源 API；从其他页面连接时，只需填写 NAS 地址，不需要 Supabase Key。</small></p></div><div class="modal-field"><label for="backendUrl">Shy2Speak 服务地址</label><input id="backendUrl" inputmode="url" value="${escapeHTML(backend.url || '')}" placeholder="http://192.168.1.20:8080"></div><div class="warning-box"><span>✓</span><p><strong>保存前会检查 API 与 PostgreSQL</strong><br><small>局域网私有地址可使用 HTTP；通过公网访问时必须配置 HTTPS。</small></p></div>`,
     actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
-      const candidate = { url: $('#backendUrl').value.trim(), publishableKey: $('#backendKey').value.trim() };
+      const candidate = { url: $('#backendUrl').value.trim() };
       const result = await shyBackend.testConnection(candidate);
-      shyBackend.saveConfig(candidate.url, candidate.publishableKey);
+      shyBackend.saveConfig(candidate.url);
       state.accountReady = true; updateAccountUI();
-      toast(`账号服务连接成功 · 邮箱${result.emailEnabled ? '可用' : '未开启'} · 手机${result.phoneEnabled ? '可用' : '需在 Supabase 开启'}。`);
+      toast(`NAS 连接成功 · 邮箱和手机密码登录可用 · 邮件找回${result.passwordRecoveryEnabled ? '已配置' : '待配置'}。`);
     } }],
   });
 }
@@ -1375,6 +1377,21 @@ function openOtpVerification(method, account, passwordReset = false) {
       await completeAuthenticatedSession(session);
       toast('账号验证成功，学习记录已开始同步。');
       if (passwordReset) setTimeout(openPasswordReset, 80);
+    } }],
+  });
+}
+
+function openRecoveryVerification(email) {
+  showModal({
+    eyebrow: 'PASSWORD RECOVERY', title: '输入重置验证码',
+    body: `<div class="status-banner"><span>OTP</span><p><strong>重置验证码已发送</strong><small>${escapeHTML(email)}</small></p></div><div class="modal-field"><label for="recoveryOtp">6 位验证码</label><input id="recoveryOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></div><div class="modal-field"><label for="recoveryPassword">新密码</label><input id="recoveryPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></div><div class="modal-field"><label for="recoveryPasswordConfirm">再次输入</label><input id="recoveryPasswordConfirm" type="password" autocomplete="new-password"></div>`,
+    actions: [{ label: '取消' }, { label: '重置密码', style: 'primary', onClick: async () => {
+      const token = $('#recoveryOtp').value.trim();
+      const password = $('#recoveryPassword').value;
+      if (token.length !== 6) { toast('请输入 6 位验证码。'); return false; }
+      if (password.length < 8 || password !== $('#recoveryPasswordConfirm').value) { toast('请输入两次相同且至少 8 位的密码。'); return false; }
+      await shyBackend.resetPasswordWithCode({ email, token, password });
+      toast('密码已重置，请使用新密码登录。');
     } }],
   });
 }
@@ -1431,7 +1448,7 @@ function openAuthModal() {
     const account = $('#authAccount').value.trim().replace(authMethod === 'phone' ? /[\s()-]/g : /$^/, '');
     if (!account) { toast('请先填写需要找回的账号。'); return; }
     try {
-      if (authMethod === 'email') { await shyBackend.recoverPassword(account); toast('密码重置邮件已发送。'); }
+      if (authMethod === 'email') { await shyBackend.recoverPassword(account); $('#appModal').close(); setTimeout(() => openRecoveryVerification(account), 80); }
       else { await shyBackend.sendOtp({ method: 'phone', account, createUser: false }); $('#appModal').close(); setTimeout(() => openOtpVerification('phone', account, true), 80); }
     } catch (error) { toast(friendlyAccountError(error)); }
   });
@@ -1466,7 +1483,7 @@ function setupSettings() {
       let available = normalized.length >= 2 && !reserved.includes(normalized);
       if (available && state.authSession) {
         try { available = await shyBackend.checkNickname(event.target.value.trim()); }
-        catch { $('#nicknameStatus').textContent = '云端检查暂不可用'; $('#nicknameStatus').style.color = 'var(--amber)'; return; }
+        catch { $('#nicknameStatus').textContent = 'NAS 检查暂不可用'; $('#nicknameStatus').style.color = 'var(--amber)'; return; }
       }
       $('#nicknameStatus').textContent = available ? (state.authSession ? '全站可用' : '本机格式可用') : '已占用或为保留名称';
       $('#nicknameStatus').style.color = available ? 'var(--green)' : 'var(--red)';
@@ -1521,7 +1538,7 @@ async function init() {
   setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();
   shyBackend.onAuthChange((session) => { state.authSession = session; updateAccountUI(); });
-  if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('云同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));
+  if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('NAS 同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));
   updateDefinitions(state.definitionLanguage, false); renderAudioTime(); renderAnalyticsOverview(); navigate(state.view, false);
   addEventListener('pagehide', () => analytics.flush());
   document.addEventListener('visibilitychange', () => {

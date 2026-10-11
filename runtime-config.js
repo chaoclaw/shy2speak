@@ -1,7 +1,5 @@
-// Public runtime configuration. GitHub Pages may replace these empty values
-// from repository variables during deployment. Users can also configure the
-// same values from Settings; the publishable key is not a service-role secret.
+// Static previews stay in offline mode. The Docker server replaces this file
+// at runtime with the same-origin self-hosted API path.
 window.__SHY2SPEAK_CONFIG__ = Object.freeze({
-  supabaseUrl: '',
-  supabasePublishableKey: '',
+  apiBase: '',
 });

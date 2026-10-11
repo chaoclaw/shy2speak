@@ -35,12 +35,12 @@ async function main() {
     if (url.includes('youtube.com/oembed')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'Live YouTube lesson', author_name: 'Verified channel', thumbnail_url: `${origin}/icons/icon.svg` }) });
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
-    if (url === 'https://demo.supabase.co/auth/v1/settings') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ external: { email: true, phone: true } }) });
-    if (url.includes('demo.supabase.co/auth/v1/token?grant_type=password')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
-    if (url.includes('demo.supabase.co/rest/v1/learning_states') && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify([cloudState]) });
-    if (url.includes('demo.supabase.co/rest/v1/learning_states')) return route.fulfill({ status: 201, contentType: 'application/json', body: '' });
-    if (url.includes('demo.supabase.co/rest/v1/practice_snapshots')) return route.fulfill({ status: 201, contentType: 'application/json', body: '' });
-    if (url.includes('demo.supabase.co/rest/v1/profiles')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: '00000000-0000-4000-8000-000000000001', nickname: 'CloudLearner', signature: 'Synced profile', avatar: '🚀', locale: 'zh', updated_at: '2026-10-11T00:00:00Z' }]) });
+    if (url === `${origin}/api/health`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, database: 'postgresql', auth: { email: true, phone: true, emailOtp: false, phoneOtp: false, passwordRecovery: false } }) });
+    if (url === `${origin}/api/auth/login`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 900, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
+    if (url === `${origin}/api/learning-state` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(cloudState) });
+    if (url === `${origin}/api/learning-state`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ syncedAt: '2099-10-11T00:00:00Z', snapshotCount: 1 }) });
+    if (url === `${origin}/api/profile/nickname/check`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ available: true }) });
+    if (url === `${origin}/api/profile` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001', nickname: 'NasLearner', signature: 'Synced profile', avatar: '🚀', locale: 'zh', updated_at: '2026-10-11T00:00:00Z' }) });
     return route.continue();
   });
 
@@ -76,9 +76,8 @@ async function main() {
   assert.equal(await page.locator('html').getAttribute('data-reduce-motion'), 'true', 'reduce motion setting should apply');
   assert.equal(await page.locator('html').getAttribute('data-high-contrast'), 'true', 'high contrast setting should apply');
   await page.click('#authPreview');
-  assert.ok((await page.locator('#modalTitle').textContent()).includes('账号服务'), 'unconfigured auth must request concrete service settings without another provider choice');
-  await page.fill('#backendUrl', 'https://demo.supabase.co');
-  await page.fill('#backendKey', 'sb_publishable_browser_test');
+  assert.ok((await page.locator('#modalTitle').textContent()).includes('绿联 NAS'), 'unconfigured auth must request the self-hosted NAS address');
+  await page.fill('#backendUrl', origin);
   await page.locator('#modalActions .primary-btn').click();
   await page.waitForFunction(() => !document.querySelector('#appModal').open);
   assert.ok((await page.locator('#backendStatus').textContent()).includes('已配置'), 'successful real health check should update backend state');
@@ -92,7 +91,7 @@ async function main() {
   await page.locator('#modalActions .primary-btn').click();
   await page.waitForFunction(() => !document.querySelector('#appModal').open);
   await page.waitForFunction(() => document.querySelector('#backendStatus').textContent.includes('已登录'));
-  assert.equal(await page.locator('#nicknameInput').inputValue(), 'CloudLearner', 'authenticated profile should hydrate from the real backend adapter');
+  assert.equal(await page.locator('#nicknameInput').inputValue(), 'NasLearner', 'authenticated profile should hydrate from the self-hosted backend adapter');
   assert.ok((await page.locator('#syncStateTitle').textContent()).includes('同步'), 'login must run a learning-state synchronization');
   assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest', 'newer cloud preferences should hydrate locally');
@@ -126,7 +125,7 @@ async function main() {
 
   assert.deepEqual(errors, [], `browser console errors: ${errors.join(' | ')}`);
   await browser.close(); browser = null;
-  console.log('ui-smoke: 8 views, responsive layouts, YouTube, Supabase auth/sync, AI status and PWA offline reload passed');
+  console.log('ui-smoke: 8 views, responsive layouts, YouTube, self-hosted auth/sync, AI status and PWA offline reload passed');
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.kill('SIGTERM'); });

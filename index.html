@@ -8,7 +8,7 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <div class="app-shell">
@@ -325,7 +325,7 @@
           <section class="view" id="view-settings" data-title-zh="个人设置" data-title-en="Settings">
             <div class="page-heading"><div><span class="eyebrow">ACCOUNT & PREFERENCES</span><h1>个人设置</h1><p>管理账号同步、公开资料、外观、语言、设备和隐私权限。</p></div><button class="primary-btn" id="authPreview">登录 / 注册</button></div>
             <div class="settings-grid">
-              <article class="card account-settings"><div class="card-heading"><div><span class="eyebrow">ACCOUNT & SYNC</span><h3>账号与云同步</h3></div><span class="status warning" id="backendStatus">未连接</span></div><div class="account-service"><span class="service-mark">S</span><div><strong id="accountIdentity">离线学习模式</strong><small id="accountServiceMeta">本机数据正常可用；连接后可跨设备同步</small></div></div><div class="sync-state"><span id="syncStateIcon">↻</span><div><strong id="syncStateTitle">等待连接账号服务</strong><small id="syncStateMeta">学习记录仍会自动保存在当前设备</small></div></div><div class="button-row"><button class="secondary-btn" id="configureBackend">配置连接</button><button class="primary-btn" id="accountAction">登录 / 注册</button><button class="text-btn hidden" id="accountSignOut">退出登录</button></div></article>
+              <article class="card account-settings"><div class="card-heading"><div><span class="eyebrow">ACCOUNT & SYNC</span><h3>账号与局域网同步</h3></div><span class="status warning" id="backendStatus">未连接</span></div><div class="account-service"><span class="service-mark">NAS</span><div><strong id="accountIdentity">离线学习模式</strong><small id="accountServiceMeta">本机数据正常可用；连接绿联 NAS 后可跨设备同步</small></div></div><div class="sync-state"><span id="syncStateIcon">↻</span><div><strong id="syncStateTitle">等待连接账号服务</strong><small id="syncStateMeta">学习记录仍会自动保存在当前设备</small></div></div><div class="button-row"><button class="secondary-btn" id="configureBackend">配置连接</button><button class="primary-btn" id="accountAction">登录 / 注册</button><button class="text-btn hidden" id="accountSignOut">退出登录</button></div></article>
 
               <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted" id="profileStorageStatus">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar">LS</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="LS">LS</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn">上传自定义头像</button></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="LinSpeak" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160">每天开口十分钟，让英语成为习惯。</textarea><small><span id="signatureCount">19</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
 
@@ -358,8 +358,8 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=14"></script>
-    <script src="./backend.js?v=14"></script>
-    <script src="./app.js?v=14"></script>
+    <script src="./runtime-config.js?v=15"></script>
+    <script src="./backend.js?v=15"></script>
+    <script src="./app.js?v=15"></script>
   </body>
 </html>

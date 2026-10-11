@@ -20,30 +20,23 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Install caption tooling
-        run: python -m pip install --disable-pip-version-check youtube-transcript-api==1.2.3 yt-dlp==2026.8.19
-
       - name: Verify caption processing
         run: python scripts/sync_youtube_captions.py --self-test
 
-      - name: Sync public YouTube captions
-        run: python scripts/sync_youtube_captions.py
-
-      - name: Validate generated course data
+      - name: Validate course data
         run: node tests/data-contract.cjs
 
-      - name: Write public runtime configuration
-        env:
-          SHY_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SHY_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
-        run: >-
-          node -e "const fs=require('fs');const c={supabaseUrl:process.env.SHY_SUPABASE_URL||'',supabasePublishableKey:process.env.SHY_SUPABASE_PUBLISHABLE_KEY||''};fs.writeFileSync('runtime-config.js','window.__SHY2SPEAK_CONFIG__ = Object.freeze('+JSON.stringify(c)+');\\n')"
+      - name: Assemble static preview
+        run: |
+          mkdir -p dist/data dist/icons
+          cp index.html app.js backend.js styles.css runtime-config.js sw.js manifest.webmanifest dist/
+          cp data/catalog.json dist/data/
+          cp icons/icon.svg dist/icons/
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: .
+          publish_dir: dist
           force_orphan: true
-          exclude_assets: '.github,node_modules'

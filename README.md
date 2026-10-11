@@ -1,49 +1,99 @@
 # Shy2Speak
 
-Responsive, dependency-free PWA for practising spoken English with real video content. It supports desktop and mobile layouts, a YouTube-backed course catalog, sentence practice, browser recording, local-first learning analytics, optional Supabase account sync, vocabulary review, immersive listening, offline app data, AI provider configuration and audio-to-slide generation.
+面向 PC 与 Mobile 的英语口语练习 PWA。当前版本包含 YouTube 主题/章节/逐句练习、浏览器录音、学习数据统计、生词复习、磨耳朵、AI 服务设置，以及完全自托管的账号与学习同步服务。
 
-## Run locally
+## 架构
+
+- `app`：Node.js 服务，同源提供 PWA 与 `/api`。
+- `database`：PostgreSQL 17，保存用户、唯一昵称、会话、学习状态和主题/章节/句子快照。
+- 浏览器继续本地优先保存；登录后同步到 NAS。Supabase 不再是运行依赖。
+- 密码使用 Node.js `scrypt` 哈希；访问令牌 15 分钟过期，刷新令牌只以 SHA-256 哈希形式入库。
+
+## 本机 Docker 启动
 
 ```bash
-python3 -m http.server 4173
+cp .env.example .env
+# 编辑 .env，至少替换 POSTGRES_PASSWORD 与 AUTH_SECRET
+docker compose up -d --build
+curl http://127.0.0.1:8080/api/health
 ```
 
-Open `http://localhost:4173`.
+浏览器打开 `http://127.0.0.1:8080`。数据库自动迁移，数据保存在 `shy2speak-postgres` Docker 卷。
 
-No dependency installation or build step is required.
-
-## Account backend
-
-The app uses a Supabase-compatible public browser API for real email/phone authentication, password recovery, globally unique nicknames and cross-device learning sync. Offline learning remains available when no backend is configured.
-
-1. Create or select an existing Supabase project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) once in its SQL editor.
-3. Enable the desired email and phone providers. Phone OTP requires an SMS provider configured in Supabase.
-4. In GitHub repository variables, set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. The Pages workflow writes them to `runtime-config.js` at deploy time.
-
-Alternatively, enter the same Project URL and publishable key from Settings → Account & Sync. Device configuration stays in local storage. A publishable/anon key is expected in the browser; never use a `service_role` key.
-
-## Data and service boundaries
-
-- `data/catalog.json` contains the versioned course contract and the initial YouTube playlist/video IDs.
-- Video playback uses the official `youtube-nocookie.com` embed. Runtime title/channel metadata is read from YouTube oEmbed when the user loads a video.
-- Every Pages deployment runs `scripts/sync_youtube_captions.py`: it reads public YouTube caption tracks without downloading media, prefers creator-provided English captions, falls back to YouTube automatic English captions, and rebuilds chapters/sentence timestamps. Deployment fails instead of presenting sample copy as an accurate transcript when no public English track can be read.
-- Practice time, attempts, recordings, prompt templates, settings and custom video topics persist in browser storage and sync after account login.
-- Microphone recording uses the browser `MediaRecorder` API and reports the real device, duration and byte size. A configured speech endpoint receives a real multipart POST and must return `total`, `pronunciation`, `fluency` and `completeness` before the score is stored.
-- AI tests issue real requests to the configured endpoint. API keys only live in `sessionStorage`; a production deployment should proxy secrets through a backend.
-- Email/phone authentication, password recovery, globally unique nicknames and learning snapshots use the Supabase adapter when configured. The UI keeps an honest offline state when it is not configured.
-- YouTube captions/chapters and vendor pronunciation scores still require their respective authorized services. The UI labels these states instead of reporting mock success.
-- Copyright-protected YouTube media is not downloaded or redistributed. Offline caching is limited to the PWA shell, structured learning data and authorized/user-owned media.
-
-## Test
+可用以下命令生成密钥：
 
 ```bash
-node --check app.js
-node --check backend.js
+openssl rand -hex 32
+```
+
+数据库密码与 `AUTH_SECRET` 应分别生成，且不要提交 `.env`。
+
+## 绿联 NAS Docker 部署
+
+`compose.ugreen.yml` 是 image-only 配置，适合在绿联 Docker「项目 / Compose」界面粘贴。镜像工作流会发布 x86_64 与 ARM64 两种架构到：
+
+```text
+ghcr.io/chaoclaw/shy2speak:edge
+```
+
+部署步骤：
+
+1. 在绿联 Docker 中新建 Compose 项目，粘贴 `compose.ugreen.yml`。
+2. 在项目环境变量中填写 `POSTGRES_PASSWORD`、至少 32 位的 `AUTH_SECRET`，以及端口 `SHY2SPEAK_PORT`（默认 `8080`）。
+3. 启动项目，等待 `database` 变为 healthy、`app` 变为 running。
+4. 打开 `http://NAS局域网IP:8080`；Docker 页面部署会自动使用同源 API，无需再填写数据库地址或浏览器密钥。
+
+浏览器麦克风与完整 PWA 安装要求安全上下文。局域网首次检查可使用 HTTP；正式使用录音时，请在绿联反向代理中为该容器配置 HTTPS 域名和证书。
+
+如 GHCR 镜像尚未设为公开，需在绿联镜像仓库中登录 `ghcr.io`，或把本仓库克隆到 NAS 后使用 `compose.yml` 本地构建。
+
+更新版本：
+
+```bash
+docker compose -f compose.ugreen.yml pull
+docker compose -f compose.ugreen.yml up -d
+```
+
+备份数据库：
+
+```bash
+docker compose -f compose.ugreen.yml exec -T database pg_dump -U shy2speak shy2speak > shy2speak-backup.sql
+```
+
+## 邮件与短信
+
+邮箱/手机号均支持密码注册与登录。验证码和邮箱找回需要相应发送渠道：
+
+- 邮件：配置 `SMTP_HOST`、`SMTP_FROM`，以及服务商要求的 `SMTP_USER`、`SMTP_PASSWORD`。
+- 短信：配置 `SMS_WEBHOOK_URL`；服务会 POST `{to, message, purpose}`。如网关需要 Bearer Token，再配置 `SMS_WEBHOOK_TOKEN`。
+
+未配置渠道时，界面会明确提示，不会显示虚假的“发送成功”。
+
+## 数据与服务边界
+
+- 视频使用 `youtube-nocookie.com` 官方嵌入播放器，不重新分发受版权保护的视频或音频。
+- `data/catalog.json` 保存课程结构。逐句稿会标记来源；未获得公开视频字幕时仍显示“待核对”，不会冒充准确字幕。
+- 麦克风录音使用浏览器 `MediaRecorder`。只有配置真实评分端点并返回完整评分后，才保存 AI 分数。
+- AI Key 只保存在当前浏览器标签页；生产环境后续可把指定厂商调用迁移到 NAS API 代理。
+- GitHub Pages 仅作为离线 UI 预览；完整注册登录与同步请使用 Docker 地址。
+
+## 开发与测试
+
+```bash
+npm ci
+npm run check
 python3 scripts/sync_youtube_captions.py --self-test
 node tests/data-contract.cjs
 node tests/backend-contract.cjs
 node tests/ui-smoke.cjs
 ```
 
-The browser smoke test launches the installed system Chromium and verifies all eight views, responsive Practice layouts, the YouTube adapter, Supabase health/auth/sync flow, auth-method separation, AI configuration state and mobile touch targets. See `docs/acceptance-cases.md` for the complete acceptance matrix and device/manual cases.
+完整容器验证：
+
+```bash
+POSTGRES_PASSWORD=test-password AUTH_SECRET=test-secret-with-at-least-32-characters docker compose up -d --build
+curl http://127.0.0.1:8080/api/health
+docker compose down
+```
+
+详见 `docs/acceptance-cases.md`。

@@ -10,12 +10,13 @@
 | UI-02 | Mobile 打开 Practice | 本章内容、预习、视频、逐句跟读依次排列；视频与英文上下相邻 | `tests/ui-smoke.cjs` |
 | DATA-01 | 加载课程目录 | 播放列表、主题、章节、句子符合数据契约，ID 与时间段不重复 | `tests/data-contract.cjs` |
 | DATA-02 | 加载 YouTube | 用户点击播放后挂载官方隐私增强播放器；运行时元数据可更新标题与频道 | `tests/ui-smoke.cjs`（网络夹具） |
-| DATA-03 | 同步实际逐句字幕 | 部署读取公开视频英文字幕轨，优先人工字幕，其次自动字幕；按自然停顿生成不重叠句子并归入实际公开视频章节；失败时阻止发布示例稿 | `scripts/sync_youtube_captions.py --self-test` + Pages 构建 |
+| DATA-03 | 处理实际逐句字幕 | 授权环境读取公开视频英文字幕轨，优先人工字幕，其次自动字幕；按自然停顿生成不重叠句子并归入实际公开视频章节；未同步时界面明确标记待核对 | `scripts/sync_youtube_captions.py --self-test` |
 | NAV-01 | 切换所有主页面 | 8 个页面均能激活，URL 与导航状态一致 | `tests/ui-smoke.cjs` |
 | AUTH-01 | 选择手机号登录 | 邮箱与手机号先选方式，手机号使用独立 `tel` 输入 | `tests/ui-smoke.cjs` |
-| AUTH-02 | 连接账号服务 | 填入 Supabase URL 与 Publishable Key 后执行真实健康检查；不再要求重复选择后端 | `tests/ui-smoke.cjs`（网络夹具） |
-| AUTH-03 | 登录与同步 | 邮箱密码登录成功后写入学习状态与范围快照，并读取云端资料 | `tests/ui-smoke.cjs`（网络夹具） |
-| AUTH-04 | 数据与权限契约 | 昵称大小写不敏感且全局唯一，三张用户表启用 RLS，Pages 支持运行时公开配置 | `tests/backend-contract.cjs` |
+| AUTH-02 | 连接账号服务 | 填入绿联 NAS 地址后检查自托管 API 与 PostgreSQL；不需要浏览器数据库 Key | `tests/ui-smoke.cjs`（网络夹具） |
+| AUTH-03 | 登录与同步 | 邮箱密码登录成功后写入学习状态与范围快照，并读取 NAS 资料 | `tests/ui-smoke.cjs`（网络夹具）+ `tests/api-integration.mjs`（真实容器） |
+| AUTH-04 | 数据与安全契约 | 昵称大小写不敏感且全局唯一；密码用 scrypt；刷新令牌哈希入库；镜像以非 root 用户运行 | `tests/backend-contract.cjs` |
+| DEPLOY-01 | 绿联 Docker 部署 | Compose 启动应用与 PostgreSQL，数据库 healthy 后 API 可用，重启后账号与学习数据仍存在 | Docker 集成测试 |
 | AI-01 | 未配置 AI | 页面明确显示“待配置”，不显示虚假的连接成功 | `tests/ui-smoke.cjs` |
 | A11Y-01 | Mobile 底部导航 | 无横向溢出，触控区域至少 44px，图标均有可访问名称 | `tests/ui-smoke.cjs` |
 | PWA-01 | 离线重载 | Service Worker 缓存应用外壳与课程目录，断网刷新后概览仍可使用 | `tests/ui-smoke.cjs` |
@@ -36,9 +37,10 @@
 
 ## 已接入但需要外部项目配置的用例
 
-- 邮箱/手机号注册、验证码、密码找回与跨设备登录：真实 Supabase Auth 请求已接入；需配置 Project URL、Publishable Key，并在 Supabase 开启对应认证渠道。
-- 全站唯一昵称：数据库使用 `citext unique` 与事务 RPC 校验；需先运行 `supabase/schema.sql`。
-- 学习数据同步：本机优先记录，登录后同步完整状态，并按主题、小节、句子写入独立快照；RLS 限制用户只能访问自己的记录。
+- 邮箱/手机号密码注册、登录与跨设备同步：由 NAS 中的 Shy2Speak API 和 PostgreSQL 提供，不依赖 Supabase。
+- 验证码与密码找回：邮件需要 SMTP，短信需要 webhook 网关；未配置时服务返回明确错误。
+- 全站唯一昵称：PostgreSQL 使用 `citext unique`；服务端事务处理并发冲突。
+- 学习数据同步：本机优先记录，登录后同步完整状态，并按主题、小节、句子写入独立快照；所有查询从访问令牌解析用户 ID，不接受客户端指定其他用户。
 - 发音 AI 评分：当前真实录音可用，但只有接入供应商评分接口后才保存真实分数。
 - YouTube 官方字幕、章节和完整播放列表枚举：需要 YouTube Data API/授权字幕服务；当前视频本身为真实官方嵌入，练习稿明确标记“待核对”。
 - 受版权保护视频下载：不实现绕过平台限制的下载；仅允许缓存用户自有或明确授权媒体。
