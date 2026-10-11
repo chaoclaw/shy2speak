@@ -20,6 +20,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Write public runtime configuration
+        env:
+          SHY_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SHY_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: >-
+          node -e "const fs=require('fs');const c={supabaseUrl:process.env.SHY_SUPABASE_URL||'',supabasePublishableKey:process.env.SHY_SUPABASE_PUBLISHABLE_KEY||''};fs.writeFileSync('runtime-config.js','window.__SHY2SPEAK_CONFIG__ = Object.freeze('+JSON.stringify(c)+');\\n')"
+
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:

@@ -8,7 +8,7 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -32,7 +32,7 @@
           <button class="nav-item" data-view-link="settings"><span>⚙</span><b data-i18n="navSettings">设置</b></button>
           <div class="mini-profile">
             <button class="avatar avatar-a" data-view-link="settings">LS</button>
-            <div><strong>LinSpeak</strong><small>本机学习档案</small></div>
+            <div><strong id="sidebarNickname">LinSpeak</strong><small id="sidebarAccountState">本机学习档案</small></div>
             <button class="icon-btn" data-view-link="settings" aria-label="更多设置">•••</button>
           </div>
         </div>
@@ -61,7 +61,7 @@
               <article class="welcome-card card">
                 <div class="welcome-copy">
                   <span class="pill success" id="streakStatus">● 正在读取学习记录</span>
-                  <h1>欢迎回来，Lin 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
+                  <h1>欢迎回来，<span id="welcomeNickname">Lin</span> 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
                   <p id="learningInsight">练习时长、次数与评分会保存在当前设备，并实时更新到学习概览。</p>
                   <div class="button-row">
                     <button class="primary-btn" data-view-link="practice">继续 Chapter 03 <span>→</span></button>
@@ -177,15 +177,15 @@
 
               <div class="practice-right">
                 <article class="score-card card">
-                  <div class="card-heading"><div><span class="eyebrow">AI FEEDBACK</span><h3>本句跟读结果</h3></div><div class="score-heading-actions"><span class="status warning" id="scoreDataStatus">示例结果</span><button class="text-btn">查看详情 →</button></div></div>
-                  <div class="word-scores"><span class="good">The</span><span class="good">best</span><span class="good">way</span><span class="good">to</span><span class="good">build</span><span class="warn">confidence</span><span class="good">is</span><span class="good">to</span><span class="good">practice</span><span class="good">every</span><span class="good">day</span></div>
-                  <div class="score-grid"><div class="total-score"><strong>86</strong><span>/100</span><small>综合得分</small></div><div><span>发音</span><strong>89</strong><i><b style="width:89%"></b></i></div><div><span>流利度</span><strong>82</strong><i><b style="width:82%"></b></i></div><div><span>完整度</span><strong>91</strong><i><b style="width:91%"></b></i></div></div>
+                  <div class="card-heading"><div><span class="eyebrow">AI FEEDBACK</span><h3>本句跟读结果</h3></div><div class="score-heading-actions"><span class="status warning" id="scoreDataStatus">等待真实评分</span><button class="text-btn">查看详情 →</button></div></div>
+                  <div class="word-scores"><span class="muted">完成录音并连接评分服务后显示逐词结果</span></div>
+                  <div class="score-grid"><div class="total-score"><strong>—</strong><span>/100</span><small>综合得分</small></div><div><span>发音</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>流利度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>完整度</span><strong>—</strong><i><b style="width:0"></b></i></div></div>
                 </article>
 
                 <article class="card history-card">
-                  <div class="card-heading"><div><span class="eyebrow">HISTORY</span><h3>本节历史成绩</h3></div><span class="pill success">较上次 +7</span></div>
-                  <svg viewBox="0 0 520 110" role="img" aria-label="历史成绩折线图"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--primary)" stop-opacity=".24"/><stop offset="1" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs><path d="M20 92 C100 85,120 74,180 68 S285 48,330 52 S430 26,500 18 L500 105 L20 105 Z" fill="url(#area)"/><path d="M20 92 C100 85,120 74,180 68 S285 48,330 52 S430 26,500 18" fill="none" stroke="var(--primary)" stroke-width="4" stroke-linecap="round"/><g fill="var(--surface)", stroke="var(--primary)" stroke-width="4"><circle cx="20" cy="92" r="5"/><circle cx="180" cy="68" r="5"/><circle cx="330" cy="52" r="5"/><circle cx="500" cy="18" r="5"/></g></svg>
-                  <div class="history-labels"><span>第一次 · 72</span><span>第二次 · 79</span><span>第三次 · 82</span><span>本次 · 86</span></div>
+                  <div class="card-heading"><div><span class="eyebrow">HISTORY</span><h3>本节历史成绩</h3></div><span class="pill muted" id="historyTrend">尚无评分</span></div>
+                  <svg viewBox="0 0 520 110" role="img" aria-label="历史成绩折线图"><path d="M20 104 H500" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 7"/></svg>
+                  <div class="history-labels"><span>完成首次真实评分后生成历史曲线</span></div>
                 </article>
               </div>
             </div>
@@ -323,9 +323,11 @@
 
           <!-- Settings -->
           <section class="view" id="view-settings" data-title-zh="个人设置" data-title-en="Settings">
-            <div class="page-heading"><div><span class="eyebrow">ACCOUNT & PREFERENCES</span><h1>个人设置</h1><p>管理公开资料、外观、语言、设备和隐私权限。</p></div><button class="secondary-btn" id="authPreview">账号流程预览</button></div>
+            <div class="page-heading"><div><span class="eyebrow">ACCOUNT & PREFERENCES</span><h1>个人设置</h1><p>管理账号同步、公开资料、外观、语言、设备和隐私权限。</p></div><button class="primary-btn" id="authPreview">登录 / 注册</button></div>
             <div class="settings-grid">
-              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar">LS</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="LS">LS</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn">上传自定义头像</button></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="LinSpeak" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160">每天开口十分钟，让英语成为习惯。</textarea><small><span id="signatureCount">19</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
+              <article class="card account-settings"><div class="card-heading"><div><span class="eyebrow">ACCOUNT & SYNC</span><h3>账号与云同步</h3></div><span class="status warning" id="backendStatus">未连接</span></div><div class="account-service"><span class="service-mark">S</span><div><strong id="accountIdentity">离线学习模式</strong><small id="accountServiceMeta">本机数据正常可用；连接后可跨设备同步</small></div></div><div class="sync-state"><span id="syncStateIcon">↻</span><div><strong id="syncStateTitle">等待连接账号服务</strong><small id="syncStateMeta">学习记录仍会自动保存在当前设备</small></div></div><div class="button-row"><button class="secondary-btn" id="configureBackend">配置连接</button><button class="primary-btn" id="accountAction">登录 / 注册</button><button class="text-btn hidden" id="accountSignOut">退出登录</button></div></article>
+
+              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted" id="profileStorageStatus">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar">LS</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="LS">LS</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn">上传自定义头像</button></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="LinSpeak" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160">每天开口十分钟，让英语成为习惯。</textarea><small><span id="signatureCount">19</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
 
               <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input id="reduceMotion" type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input id="highContrast" type="checkbox" /><i class="switch"></i></label></div></article>
 
@@ -356,6 +358,8 @@
       </form>
     </dialog>
 
-    <script src="./app.js?v=12"></script>
+    <script src="./runtime-config.js?v=13"></script>
+    <script src="./backend.js?v=13"></script>
+    <script src="./app.js?v=13"></script>
   </body>
 </html>

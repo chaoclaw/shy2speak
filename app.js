@@ -26,6 +26,9 @@ const state = {
   studioSource: null,
   reduceMotion: localStorage.getItem('shy-reduce-motion') === 'true',
   highContrast: localStorage.getItem('shy-high-contrast') === 'true',
+  authSession: null,
+  accountReady: false,
+  lastSyncedAt: null,
 };
 
 const STORAGE_KEYS = {
@@ -35,6 +38,7 @@ const STORAGE_KEYS = {
   providers: 'shy-ai-providers-v1',
   prompts: 'shy-ai-prompts-v1',
   profile: 'shy-profile-v1',
+  sync: 'shy-cloud-sync-v1',
 };
 
 const DEFAULT_PROMPTS = [
@@ -55,6 +59,127 @@ function writeStoredJSON(key, value) {
 
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character]);
+}
+
+let cloudSyncTimer;
+
+function storedProfile() {
+  return readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
+}
+
+function updateProfileChrome(profile = storedProfile()) {
+  const nickname = profile.nickname || 'Learner';
+  const shortName = nickname.length > 12 ? `${nickname.slice(0, 12)}…` : nickname;
+  if ($('#sidebarNickname')) $('#sidebarNickname').textContent = shortName;
+  if ($('#welcomeNickname')) $('#welcomeNickname').textContent = nickname.split(/\s+/)[0];
+  $$('.top-avatar,.mini-profile .avatar').forEach((node) => { node.textContent = profile.avatar || nickname.slice(0, 2).toUpperCase(); });
+}
+
+function setSyncMessage(title, meta, kind = 'warning') {
+  if (!$('#syncStateTitle')) return;
+  $('#syncStateTitle').textContent = title;
+  $('#syncStateMeta').textContent = meta;
+  $('#syncStateIcon').textContent = kind === 'success' ? '✓' : kind === 'working' ? '↻' : '○';
+}
+
+function updateAccountUI() {
+  if (!window.shyBackend || !$('#backendStatus')) return;
+  const backend = shyBackend.getConfig();
+  const session = state.authSession || shyBackend.getSession();
+  const identity = session?.user?.email || session?.user?.phone || '';
+  if (!backend.configured) {
+    $('#backendStatus').textContent = '未连接'; $('#backendStatus').className = 'status warning';
+    $('#accountIdentity').textContent = '离线学习模式';
+    $('#accountServiceMeta').textContent = '本机数据正常可用；配置现有 Supabase 项目后可跨设备同步';
+    $('#sidebarAccountState').textContent = '本机学习档案';
+    $('#configureBackend').textContent = '配置连接';
+    $('#authPreview').textContent = '连接账号服务'; $('#accountAction').textContent = '连接后登录';
+    $('#accountAction').disabled = true; $('#accountSignOut').classList.add('hidden');
+    $('#profileStorageStatus').textContent = '保存在当前设备'; $('#profileStorageStatus').className = 'status muted';
+    setSyncMessage('等待连接账号服务', '学习记录仍会自动保存在当前设备');
+    return;
+  }
+  $('#configureBackend').textContent = '连接设置';
+  $('#accountAction').disabled = false;
+  if (!session) {
+    $('#backendStatus').textContent = '服务已配置'; $('#backendStatus').className = 'status success';
+    $('#accountIdentity').textContent = '尚未登录'; $('#accountServiceMeta').textContent = `${backend.url} · Supabase`;
+    $('#sidebarAccountState').textContent = '本机学习档案';
+    $('#authPreview').textContent = '登录 / 注册'; $('#accountAction').textContent = '登录 / 注册';
+    $('#accountSignOut').classList.add('hidden');
+    $('#profileStorageStatus').textContent = '保存在当前设备'; $('#profileStorageStatus').className = 'status muted';
+    setSyncMessage('账号服务可用', '登录后自动合并并同步本机学习记录');
+    return;
+  }
+  $('#backendStatus').textContent = '已登录'; $('#backendStatus').className = 'status success';
+  $('#accountIdentity').textContent = identity || '已认证用户'; $('#accountServiceMeta').textContent = `${backend.url} · 安全会话已建立`;
+  $('#sidebarAccountState').textContent = '云端同步账号';
+  $('#authPreview').textContent = '账号已登录'; $('#accountAction').textContent = '立即同步';
+  $('#accountSignOut').classList.remove('hidden');
+  $('#profileStorageStatus').textContent = '云端同步'; $('#profileStorageStatus').className = 'status success';
+  const sync = readStoredJSON(STORAGE_KEYS.sync, {});
+  setSyncMessage(sync.lastSyncedAt ? '学习记录已同步' : '准备首次同步', sync.lastSyncedAt ? `最近同步：${new Date(sync.lastSyncedAt).toLocaleString()}` : '本机数据将安全上传到当前账号', sync.lastSyncedAt ? 'success' : 'working');
+}
+
+function cloudPayload() {
+  const updatedAt = analytics.data.updatedAt || new Date().toISOString();
+  return {
+    version: 1,
+    updatedAt,
+    analytics: analytics.data,
+    profile: storedProfile(),
+    customTopics: readStoredJSON(STORAGE_KEYS.customTopics, []),
+    prompts: readStoredJSON(STORAGE_KEYS.prompts, null),
+    preferences: { mode: state.mode, theme: state.theme, language: state.language, definitionLanguage: state.definitionLanguage },
+  };
+}
+
+function scheduleCloudSync(delay = 1200) {
+  if (!state.accountReady || !state.authSession || !window.shyBackend?.isConfigured()) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(() => syncCloudState().catch((error) => {
+    setSyncMessage('云同步暂时中断', `${error.message} · 本机数据未受影响`);
+  }), delay);
+}
+
+async function syncCloudState(showSuccess = false) {
+  if (!state.authSession) throw new Error('请先登录');
+  setSyncMessage('正在同步学习记录', '上传主题、小节、句子时长、次数与历史评分', 'working');
+  const result = await shyBackend.pushLearningState(cloudPayload());
+  state.lastSyncedAt = result.syncedAt;
+  writeStoredJSON(STORAGE_KEYS.sync, { lastSyncedAt: result.syncedAt, snapshotCount: result.snapshotCount });
+  setSyncMessage('学习记录已同步', `${result.snapshotCount} 个学习范围 · ${new Date(result.syncedAt).toLocaleString()}`, 'success');
+  if (showSuccess) toast(`同步完成：已更新 ${result.snapshotCount} 个主题/小节/句子记录。`);
+  return result;
+}
+
+async function reconcileCloudState() {
+  if (!state.authSession) return;
+  setSyncMessage('正在检查云端记录', '将保留更新时间较新的学习数据', 'working');
+  const remote = await shyBackend.pullLearningState();
+  const remotePayload = remote?.payload;
+  const localUpdated = Date.parse(analytics.data.updatedAt || 0) || 0;
+  const remoteUpdated = Date.parse(remotePayload?.updatedAt || remote?.client_updated_at || 0) || 0;
+  if (remotePayload?.analytics && remoteUpdated > localUpdated) {
+    analytics.data = remotePayload.analytics;
+    writeStoredJSON(STORAGE_KEYS.analytics, analytics.data);
+    if (remotePayload.profile) writeStoredJSON(STORAGE_KEYS.profile, remotePayload.profile);
+    if (Array.isArray(remotePayload.customTopics)) {
+      const localCustomIds = new Set(readStoredJSON(STORAGE_KEYS.customTopics, []).map((topic) => topic.id));
+      writeStoredJSON(STORAGE_KEYS.customTopics, remotePayload.customTopics);
+      if (state.catalog) {
+        const builtInTopics = state.catalog.topics.filter((topic) => !localCustomIds.has(topic.id));
+        state.catalog.topics = [...builtInTopics, ...remotePayload.customTopics];
+        renderPracticeTopic();
+      }
+    }
+    if (remotePayload.prompts) writeStoredJSON(STORAGE_KEYS.prompts, remotePayload.prompts);
+    const preferences = remotePayload.preferences || {};
+    const preferenceStorage = { mode: 'shy-mode', theme: 'shy-theme', language: 'shy-language', definitionLanguage: 'shy-definition-language' };
+    Object.keys(preferenceStorage).forEach((key) => { if (preferences[key]) { state[key] = preferences[key]; localStorage.setItem(preferenceStorage[key], preferences[key]); } });
+    applyAppearance(); applyLanguage(); updateProfileChrome(); renderAnalyticsOverview();
+    setSyncMessage('已恢复云端学习记录', `云端更新于 ${new Date(remoteUpdated).toLocaleString()}`, 'success');
+  } else await syncCloudState(false);
 }
 
 const analytics = {
@@ -106,7 +231,7 @@ const analytics = {
     this.data.events.push({ type, ...payload, at: new Date().toISOString() });
     this.data.events = this.data.events.slice(-300);
   },
-  save() { writeStoredJSON(STORAGE_KEYS.analytics, this.data); },
+  save() { this.data.updatedAt = new Date().toISOString(); writeStoredJSON(STORAGE_KEYS.analytics, this.data); scheduleCloudSync(); },
   flush() { Object.keys(this.active).forEach((bucket) => this.end(bucket)); },
 };
 
@@ -282,7 +407,7 @@ function createFallbackChapter() {
 
 async function loadCatalog() {
   try {
-    const response = await fetch('./data/catalog.json?v=12', { cache: 'no-cache' });
+    const response = await fetch('./data/catalog.json?v=13', { cache: 'no-cache' });
     if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
     const catalog = await response.json();
     if (!Array.isArray(catalog.topics)) throw new Error('Catalog topics are missing');
@@ -351,6 +476,7 @@ function renderPracticeSentences(chapter) {
     empty.innerHTML = '<span>CC</span><strong>字幕与逐句练习尚未同步</strong><small>视频可以正常播放。导入授权字幕或连接转写服务后即可生成逐句练习。</small>';
     list.append(empty);
     state.sentenceId = '';
+    renderStoredPracticeResults();
     return;
   }
   if (!sentences.some((sentence) => sentence.id === state.sentenceId)) state.sentenceId = sentences[0].id;
@@ -367,6 +493,7 @@ function renderPracticeSentences(chapter) {
     content.append(english, translation); button.append(number, content, play); list.append(button);
   });
   bindPracticeLines();
+  renderStoredPracticeResults();
 }
 
 function renderPracticeTopic() {
@@ -468,6 +595,7 @@ function bindPracticeLines() {
       analytics.begin('sentences', key, true);
       loadYouTubePlayer(Number(line.dataset.start || 0), true);
       $$('mark', line).forEach((mark) => { mark.onclick = (markEvent) => { markEvent.stopPropagation(); navigate('vocabulary'); }; });
+      renderStoredPracticeResults();
       renderAnalyticsOverview();
     };
     $$('mark', line).forEach((mark) => { mark.onclick = (event) => { event.stopPropagation(); navigate('vocabulary'); }; });
@@ -566,7 +694,10 @@ function navigate(view, push = true) {
 function toast(message, actionText, action) {
   const node = document.createElement('div');
   node.className = 'toast';
-  node.innerHTML = `<span>✓</span><p>${message}</p>${actionText ? `<button>${actionText}</button>` : ''}`;
+  const icon = document.createElement('span'); icon.textContent = '✓';
+  const copy = document.createElement('p'); copy.textContent = String(message || '操作完成');
+  node.append(icon, copy);
+  if (actionText) { const button = document.createElement('button'); button.textContent = actionText; node.append(button); }
   $('#toastContainer').append(node);
   if (actionText) $('button', node).addEventListener('click', () => { action?.(); removeToast(node); });
   setTimeout(() => removeToast(node), 4600);
@@ -737,8 +868,42 @@ function renderPracticeScore(score) {
   const items = score.words.length ? score.words : fallbackWords.map((word) => ({ word, score: score.pronunciation }));
   items.forEach((item) => { const span = document.createElement('span'); span.textContent = item.word || item.text || ''; span.className = Number(item.score ?? item.accuracy ?? 100) >= 75 ? 'good' : 'warn'; words.append(span); });
   $('#scoreDataStatus').textContent = '真实 AI 评分'; $('#scoreDataStatus').className = 'status success';
-  const history = analytics.ensure('sentences', `${state.topicId}:${state.chapterId}:${state.sentenceId || 'unspecified'}`).scores;
-  const labels = $('.history-labels'); labels.replaceChildren(...history.slice(-4).map((item, index) => { const span = document.createElement('span'); span.textContent = `第 ${Math.max(1, history.length - 3 + index)} 次 · ${Math.round(item.total)}`; return span; }));
+  renderScoreHistory();
+}
+
+function renderScoreHistory() {
+  const history = analytics.ensure('chapters', `${state.topicId}:${state.chapterId}`).scores || [];
+  const recent = history.slice(-8);
+  const labels = $('.history-labels'); const svg = $('.history-card svg');
+  if (!recent.length) {
+    $('#historyTrend').textContent = '尚无评分'; $('#historyTrend').className = 'pill muted';
+    labels.innerHTML = '<span>完成首次真实评分后生成历史曲线</span>';
+    svg.innerHTML = '<path d="M20 104 H500" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 7"/>';
+    return;
+  }
+  const points = recent.map((score, index) => {
+    const x = recent.length === 1 ? 260 : 20 + (480 * index) / (recent.length - 1);
+    const y = 100 - Math.min(100, Math.max(0, Number(score.total || 0))) * .82;
+    return [Number(x.toFixed(1)), Number(y.toFixed(1))];
+  });
+  const path = points.map(([x, y], index) => `${index ? 'L' : 'M'}${x} ${y}`).join(' ');
+  svg.innerHTML = `<path d="M20 100 H500" fill="none" stroke="var(--border)" stroke-width="1"/><path d="${path}" fill="none" stroke="var(--primary)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>${points.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="var(--surface)" stroke="var(--primary)" stroke-width="4"/>`).join('')}`;
+  const previous = recent.at(-2); const latest = recent.at(-1); const delta = previous ? Math.round(latest.total - previous.total) : 0;
+  $('#historyTrend').textContent = previous ? `较上次 ${delta >= 0 ? '+' : ''}${delta}` : '首次评分'; $('#historyTrend').className = `pill ${delta >= 0 ? 'success' : 'warning'}`;
+  labels.replaceChildren(...recent.slice(-4).map((item, index) => { const span = document.createElement('span'); span.textContent = `第 ${Math.max(1, history.length - 3 + index)} 次 · ${Math.round(item.total)}`; return span; }));
+}
+
+function renderStoredPracticeResults() {
+  const scores = state.sentenceId ? (analytics.ensure('sentences', `${state.topicId}:${state.chapterId}:${state.sentenceId}`).scores || []) : [];
+  const latest = scores.at(-1);
+  if (latest) renderPracticeScore(latest);
+  else {
+    $('.total-score strong').textContent = '—';
+    [['pronunciation', 2], ['fluency', 3], ['completeness', 4]].forEach(([, position]) => { const cell = $(`.score-grid > div:nth-child(${position})`); $('strong', cell).textContent = '—'; $('i b', cell).style.width = '0'; });
+    $('.word-scores').innerHTML = '<span class="muted">完成录音并连接评分服务后显示逐词结果</span>';
+    $('#scoreDataStatus').textContent = '等待真实评分'; $('#scoreDataStatus').className = 'status warning';
+    renderScoreHistory();
+  }
 }
 
 async function getMicrophoneInfo() {
@@ -1128,6 +1293,141 @@ function setupAI() {
   });
 }
 
+function applyProfileToForm(profile = storedProfile()) {
+  if (!$('#nicknameInput')) return;
+  $('#nicknameInput').value = profile.nickname || 'LinSpeak';
+  $('#signatureInput').value = profile.signature || '';
+  $('#signatureCount').textContent = [...(profile.signature || '')].length;
+  $('#profileAvatar').textContent = profile.avatar || 'LS';
+  $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === (profile.avatar || 'LS')));
+  updateProfileChrome(profile);
+}
+
+function friendlyAccountError(error) {
+  const message = String(error?.message || error || '操作失败');
+  if (/invalid login credentials/i.test(message)) return '账号或密码不正确。';
+  if (/email not confirmed/i.test(message)) return '邮箱尚未验证，请先打开验证邮件。';
+  if (/user already registered/i.test(message)) return '该账号已经注册，请直接登录。';
+  if (/nickname already exists|duplicate key/i.test(message)) return '这个昵称已被使用，请换一个。';
+  if (/failed to fetch|network/i.test(message)) return '无法连接账号服务，请检查网络与服务地址。';
+  return message;
+}
+
+function openBackendConfig() {
+  const backend = shyBackend.getConfig();
+  showModal({
+    eyebrow: 'ACCOUNT SERVICE', title: backend.configured ? '账号服务连接设置' : '连接现有账号服务',
+    body: `<div class="status-banner"><span>SUPABASE</span><p><strong>后端方案已确定</strong><small>这里只填写现有项目的连接信息，不再选择后端类型。Publishable Key 可安全用于浏览器；请勿填写 service_role。</small></p></div><div class="modal-field"><label for="backendUrl">Project URL</label><input id="backendUrl" inputmode="url" value="${escapeHTML(backend.url || '')}" placeholder="https://your-project.supabase.co"></div><div class="modal-field"><label for="backendKey">Publishable Key</label><input id="backendKey" type="password" autocomplete="off" placeholder="${backend.configured ? '留空以保留当前 Key' : 'sb_publishable_… 或 anon key'}"></div><div class="warning-box"><span>✓</span><p><strong>配置后会执行真实健康检查</strong><br><small>数据库需先运行仓库中的 supabase/schema.sql；学习记录在未连接时始终保留在本机。</small></p></div>`,
+    actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
+      const candidate = { url: $('#backendUrl').value.trim(), publishableKey: $('#backendKey').value.trim() };
+      const result = await shyBackend.testConnection(candidate);
+      shyBackend.saveConfig(candidate.url, candidate.publishableKey);
+      state.accountReady = true; updateAccountUI();
+      toast(`账号服务连接成功 · 邮箱${result.emailEnabled ? '可用' : '未开启'} · 手机${result.phoneEnabled ? '可用' : '需在 Supabase 开启'}。`);
+    } }],
+  });
+}
+
+async function completeAuthenticatedSession(session) {
+  state.authSession = session;
+  state.accountReady = true;
+  updateAccountUI();
+  await reconcileCloudState();
+  try {
+    const remoteProfile = await shyBackend.getProfile();
+    if (remoteProfile) {
+      const profile = { nickname: remoteProfile.nickname, signature: remoteProfile.signature || '', avatar: remoteProfile.avatar || 'LS', updatedAt: remoteProfile.updated_at };
+      writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile);
+    }
+  } catch (error) { setSyncMessage('学习记录已同步', `资料读取提示：${friendlyAccountError(error)}`, 'success'); }
+  updateAccountUI();
+}
+
+function openPasswordReset() {
+  showModal({
+    eyebrow: 'SECURITY', title: '设置新密码',
+    body: '<div class="modal-field"><label for="newAccountPassword">新密码</label><input id="newAccountPassword" type="password" autocomplete="new-password" placeholder="至少 8 位"></div><div class="modal-field"><label for="confirmAccountPassword">再次输入</label><input id="confirmAccountPassword" type="password" autocomplete="new-password"></div>',
+    actions: [{ label: '稍后' }, { label: '更新密码', style: 'primary', onClick: async () => {
+      const password = $('#newAccountPassword').value;
+      if (password.length < 8 || password !== $('#confirmAccountPassword').value) { toast('请输入两次相同且至少 8 位的密码。'); return false; }
+      await shyBackend.updatePassword(password); toast('密码已更新。');
+    } }],
+  });
+}
+
+function openOtpVerification(method, account, passwordReset = false) {
+  showModal({
+    eyebrow: 'VERIFY ACCOUNT', title: method === 'email' ? '输入邮箱验证码' : '输入短信验证码',
+    body: `<div class="status-banner"><span>OTP</span><p><strong>验证码已发送</strong><small>${escapeHTML(account)}</small></p></div><div class="modal-field"><label for="authOtp">6 位验证码</label><input id="authOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="000000"></div>`,
+    actions: [{ label: '取消' }, { label: '验证', style: 'primary', onClick: async () => {
+      const token = $('#authOtp').value.trim();
+      if (token.length < 6) { toast('请输入收到的验证码。'); return false; }
+      const session = await shyBackend.verifyOtp({ method, account, token });
+      await completeAuthenticatedSession(session);
+      toast('账号验证成功，学习记录已开始同步。');
+      if (passwordReset) setTimeout(openPasswordReset, 80);
+    } }],
+  });
+}
+
+function openAuthModal() {
+  if (!shyBackend.isConfigured()) { openBackendConfig(); return; }
+  if (state.authSession) { navigate('settings'); return; }
+  let authMode = 'login';
+  let authMethod = 'email';
+  showModal({
+    eyebrow: 'WELCOME TO SHY2SPEAK', title: '登录',
+    body: `<div class="status-banner"><span>LIVE</span><p><strong>真实账号服务已连接</strong><small>账号用于跨设备同步学习进度；邮箱与手机号分开选择。</small></p></div><div class="auth-tabs" id="authModeTabs"><button class="active" type="button" data-auth-mode="login">登录</button><button type="button" data-auth-mode="register">注册</button></div><strong class="auth-method-label">选择账号方式</strong><div class="auth-methods"><button class="auth-method active" type="button" data-auth-method="email"><span class="auth-method-icon">✉</span><span class="auth-method-copy"><strong>邮箱</strong><small>密码或验证码</small></span></button><button class="auth-method" type="button" data-auth-method="phone"><span class="auth-method-icon">☎</span><span class="auth-method-copy"><strong>手机号</strong><small>密码或短信验证码</small></span></button></div><div class="modal-field"><label id="authAccountLabel" for="authAccount">邮箱地址</label><input id="authAccount" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"><small class="auth-account-help" id="authAccountHelp">登录和密码找回信息将发送到此邮箱。</small></div><div class="modal-field hidden" id="authNicknameField"><label for="authNickname">昵称</label><input id="authNickname" maxlength="24" value="${escapeHTML(storedProfile().nickname || '')}" placeholder="全站唯一昵称"></div><div class="modal-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码"></div><div class="auth-support"><button class="text-btn" id="authCodeAction" type="button">使用邮箱验证码</button><button class="text-btn" id="authRecovery" type="button">找回密码</button></div>`,
+    actions: [{ label: '取消' }, { label: '登录', style: 'primary', onClick: async () => {
+      const account = $('#authAccount').value.trim().replace(authMethod === 'phone' ? /[\s()-]/g : /$^/, '');
+      const password = $('#authPassword').value;
+      if (!account || password.length < (authMode === 'register' ? 8 : 1)) { toast(authMode === 'register' ? '请填写账号和至少 8 位密码。' : '请填写账号和密码。'); return false; }
+      if (authMode === 'register') {
+        const payload = await shyBackend.signUp({ method: authMethod, account, password, nickname: $('#authNickname').value.trim() });
+        if (payload?.access_token) { await completeAuthenticatedSession(shyBackend.getSession()); toast('注册成功，学习记录已开始同步。'); }
+        else toast(authMethod === 'email' ? '注册已提交，请打开验证邮件完成注册。' : '注册已提交，请输入收到的短信验证码。');
+      } else {
+        const session = await shyBackend.signInPassword({ method: authMethod, account, password });
+        await completeAuthenticatedSession(session); toast('登录成功，学习记录已同步。');
+      }
+    } }],
+  });
+
+  const renderAuthChoice = () => {
+    $$('#authModeTabs button').forEach((button) => button.classList.toggle('active', button.dataset.authMode === authMode));
+    $$('.auth-method').forEach((button) => button.classList.toggle('active', button.dataset.authMethod === authMethod));
+    const email = authMethod === 'email'; const account = $('#authAccount');
+    $('#modalTitle').textContent = authMode === 'login' ? '登录' : '创建账号';
+    $('#authAccountLabel').textContent = email ? '邮箱地址' : '手机号码';
+    account.type = email ? 'email' : 'tel'; account.inputMode = email ? 'email' : 'tel'; account.autocomplete = email ? 'email' : 'tel'; account.placeholder = email ? 'name@example.com' : '+86 请输入手机号码'; account.value = '';
+    $('#authAccountHelp').textContent = email ? '验证、登录和密码找回信息将发送到此邮箱。' : '短信验证码和安全通知将发送到此手机号。';
+    $('#authCodeAction').textContent = email ? '使用邮箱验证码' : '使用短信验证码';
+    $('#authNicknameField').classList.toggle('hidden', authMode !== 'register');
+    $('#authPassword').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
+    $('#authPassword').placeholder = authMode === 'login' ? '输入密码' : '设置至少 8 位密码';
+    $('#authRecovery').hidden = authMode === 'register';
+    $('#modalActions .primary-btn').textContent = authMode === 'login' ? '登录' : '创建账号';
+  };
+  $$('#authModeTabs button').forEach((button) => button.addEventListener('click', () => { authMode = button.dataset.authMode; renderAuthChoice(); }));
+  $$('.auth-method').forEach((button) => button.addEventListener('click', () => { authMethod = button.dataset.authMethod; renderAuthChoice(); $('#authAccount').focus(); }));
+  $('#authCodeAction').addEventListener('click', async () => {
+    const account = $('#authAccount').value.trim().replace(authMethod === 'phone' ? /[\s()-]/g : /$^/, '');
+    if (!account) { toast('请先填写邮箱或手机号。'); return; }
+    try {
+      await shyBackend.sendOtp({ method: authMethod, account, createUser: authMode === 'register' });
+      $('#appModal').close(); setTimeout(() => openOtpVerification(authMethod, account, false), 80);
+    } catch (error) { toast(friendlyAccountError(error)); }
+  });
+  $('#authRecovery').addEventListener('click', async () => {
+    const account = $('#authAccount').value.trim().replace(authMethod === 'phone' ? /[\s()-]/g : /$^/, '');
+    if (!account) { toast('请先填写需要找回的账号。'); return; }
+    try {
+      if (authMethod === 'email') { await shyBackend.recoverPassword(account); toast('密码重置邮件已发送。'); }
+      else { await shyBackend.sendOtp({ method: 'phone', account, createUser: false }); $('#appModal').close(); setTimeout(() => openOtpVerification('phone', account, true), 80); }
+    } catch (error) { toast(friendlyAccountError(error)); }
+  });
+}
+
 function setupSettings() {
   $$('.mode-choices button').forEach((button) => button.addEventListener('click', () => {
     state.mode = button.dataset.modeChoice;
@@ -1143,9 +1443,7 @@ function setupSettings() {
   $('#siteLanguage').addEventListener('change', (event) => { state.language = event.target.value; localStorage.setItem('shy-language', state.language); applyLanguage(); });
   $('#defaultDefinitionLanguage').value = state.definitionLanguage;
   $('#defaultDefinitionLanguage').addEventListener('change', (event) => updateDefinitions(event.target.value));
-  const profile = readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
-  $('#nicknameInput').value = profile.nickname; $('#signatureInput').value = profile.signature; $('#signatureCount').textContent = [...profile.signature].length; $('#profileAvatar').textContent = profile.avatar;
-  $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === profile.avatar));
+  applyProfileToForm(storedProfile());
   $$('.avatar-options .avatar').forEach((button) => button.addEventListener('click', () => {
     $$('.avatar-options .avatar').forEach((item) => item.classList.remove('selected'));
     button.classList.add('selected'); $('#profileAvatar').textContent = button.dataset.avatar;
@@ -1154,19 +1452,27 @@ function setupSettings() {
   let nicknameTimer;
   $('#nicknameInput').addEventListener('input', (event) => {
     clearTimeout(nicknameTimer); $('#nicknameStatus').textContent = '检查中…'; $('#nicknameStatus').style.color = 'var(--muted)';
-    nicknameTimer = setTimeout(() => {
+    nicknameTimer = setTimeout(async () => {
       const normalized = event.target.value.trim().toLowerCase().replace(/\s+/g, ' ');
-      const available = normalized.length >= 2 && !reserved.includes(normalized);
-      $('#nicknameStatus').textContent = available ? '本机格式可用' : '保留名称 · 试试 LinSpeak_27';
+      let available = normalized.length >= 2 && !reserved.includes(normalized);
+      if (available && state.authSession) {
+        try { available = await shyBackend.checkNickname(event.target.value.trim()); }
+        catch { $('#nicknameStatus').textContent = '云端检查暂不可用'; $('#nicknameStatus').style.color = 'var(--amber)'; return; }
+      }
+      $('#nicknameStatus').textContent = available ? (state.authSession ? '全站可用' : '本机格式可用') : '已占用或为保留名称';
       $('#nicknameStatus').style.color = available ? 'var(--green)' : 'var(--red)';
     }, 420);
   });
   $('#signatureInput').addEventListener('input', (event) => $('#signatureCount').textContent = [...event.target.value].length);
-  $('#saveProfile').addEventListener('click', () => {
+  $('#saveProfile').addEventListener('click', async () => {
     const nickname = $('#nicknameInput').value.trim();
     if (nickname.length < 2 || reserved.includes(nickname.toLowerCase())) { toast('昵称格式不可用，请修改后再保存。'); return; }
-    writeStoredJSON(STORAGE_KEYS.profile, { nickname, signature: $('#signatureInput').value.trim(), avatar: $('#profileAvatar').textContent, updatedAt: new Date().toISOString() });
-    toast('个人资料已保存在当前设备。全站唯一昵称需连接账号服务后验证。');
+    const profile = { nickname, signature: $('#signatureInput').value.trim(), avatar: $('#profileAvatar').textContent, updatedAt: new Date().toISOString() };
+    try {
+      if (state.authSession) await shyBackend.saveProfile({ ...profile, locale: state.language });
+      writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile); scheduleCloudSync(50);
+      toast(state.authSession ? '个人资料已保存；昵称已通过全站唯一性校验。' : '个人资料已保存在当前设备，登录后将自动同步。');
+    } catch (error) { toast(friendlyAccountError(error)); }
   });
   $('#testMic').addEventListener('click', async () => {
     const button = $('#testMic'); button.disabled = true; button.textContent = '检测中…';
@@ -1184,41 +1490,11 @@ function setupSettings() {
     $('#storageSummary').textContent = `已用 ${formatBytes(usage)} · 配额 ${formatBytes(quota)}`;
     $('#storagePermissionStatus').textContent = '可用'; $('#storagePermissionStatus').className = 'status success';
   }).catch(() => { $('#storageSummary').textContent = '浏览器未提供存储用量'; $('#storagePermissionStatus').textContent = '受限'; });
-  $('#authPreview').addEventListener('click', () => {
-    let authMode = 'login';
-    let authMethod = 'email';
-    showModal({
-      eyebrow: 'WELCOME TO SHY2SPEAK',
-      title: '登录流程预览',
-      body: `<div class="status-banner"><span>DEMO</span><p><strong>账号后端尚未连接</strong><small>下面用于验证邮箱与手机号分流的交互，不会创建真实账号或发送验证码。</small></p></div><div class="auth-tabs" id="authModeTabs"><button class="active" type="button" data-auth-mode="login">登录</button><button type="button" data-auth-mode="register">注册</button></div><strong class="auth-method-label">选择账号方式</strong><div class="auth-methods"><button class="auth-method active" type="button" data-auth-method="email"><span class="auth-method-icon">✉</span><span class="auth-method-copy"><strong>邮箱</strong><small>使用邮箱地址</small></span></button><button class="auth-method" type="button" data-auth-method="phone"><span class="auth-method-icon">☎</span><span class="auth-method-copy"><strong>手机号</strong><small>使用短信验证</small></span></button></div><div class="modal-field"><label id="authAccountLabel" for="authAccount">邮箱地址</label><input id="authAccount" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"><small class="auth-account-help" id="authAccountHelp">登录和密码找回信息将发送到此邮箱。</small></div><div class="modal-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="输入密码"></div><div class="auth-support"><button class="text-btn" id="authCodeAction" type="button">使用邮箱验证码</button><button class="text-btn" id="authRecovery" type="button">找回密码</button></div>`,
-      actions: [{ label: '取消' }, { label: '登录', style: 'primary', onClick: () => toast(`${authMethod === 'email' ? '邮箱' : '手机号'}${authMode === 'login' ? '登录' : '注册'}流程预览完成。`) }],
-    });
-
-    const renderAuthChoice = () => {
-      $$('#authModeTabs button').forEach((button) => button.classList.toggle('active', button.dataset.authMode === authMode));
-      $$('.auth-method').forEach((button) => button.classList.toggle('active', button.dataset.authMethod === authMethod));
-      const email = authMethod === 'email';
-      const account = $('#authAccount');
-      $('#modalTitle').textContent = authMode === 'login' ? '登录流程预览' : '注册流程预览';
-      $('#authAccountLabel').textContent = email ? '邮箱地址' : '手机号码';
-      account.type = email ? 'email' : 'tel';
-      account.inputMode = email ? 'email' : 'tel';
-      account.autocomplete = email ? 'email' : 'tel';
-      account.placeholder = email ? 'name@example.com' : '+86 请输入手机号码';
-      account.value = '';
-      $('#authAccountHelp').textContent = email ? '登录和密码找回信息将发送到此邮箱。' : '登录验证码和安全通知将发送到此手机号。';
-      $('#authCodeAction').textContent = email ? '使用邮箱验证码' : '使用短信验证码';
-      $('#authPassword').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
-      $('#authPassword').placeholder = authMode === 'login' ? '输入密码' : '设置至少 8 位密码';
-      $('#authRecovery').hidden = authMode === 'register';
-      $('#modalActions .primary-btn').textContent = authMode === 'login' ? '登录' : '创建账号';
-    };
-
-    $$('#authModeTabs button').forEach((button) => button.addEventListener('click', () => { authMode = button.dataset.authMode; renderAuthChoice(); }));
-    $$('.auth-method').forEach((button) => button.addEventListener('click', () => { authMethod = button.dataset.authMethod; renderAuthChoice(); $('#authAccount').focus(); }));
-    $('#authCodeAction').addEventListener('click', () => toast(authMethod === 'email' ? '邮箱验证码流程已选择。' : '短信验证码流程已选择。'));
-    $('#authRecovery').addEventListener('click', () => toast(`将通过${authMethod === 'email' ? '邮箱' : '手机号'}找回密码。`));
-  });
+  $('#configureBackend').addEventListener('click', openBackendConfig);
+  $('#authPreview').addEventListener('click', () => state.authSession ? navigate('settings') : openAuthModal());
+  $('#accountAction').addEventListener('click', () => state.authSession ? syncCloudState(true).catch((error) => toast(friendlyAccountError(error))) : openAuthModal());
+  $('#accountSignOut').addEventListener('click', async () => { await shyBackend.signOut(); state.authSession = null; updateAccountUI(); toast('已退出登录，本机学习记录仍然保留。'); });
+  updateAccountUI();
 }
 
 function setupPWA() {
@@ -1229,9 +1505,14 @@ function setupPWA() {
 }
 
 async function init() {
+  const account = await shyBackend.initialize().catch((error) => ({ session: null, error }));
+  state.authSession = account.session || null;
   applyAppearance(); applyLanguage(); setupNavigation(); setupGlobalControls();
   await loadCatalog();
   setupCatalogControls(); setupPractice(); setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
+  state.accountReady = true; updateProfileChrome(); updateAccountUI();
+  shyBackend.onAuthChange((session) => { state.authSession = session; updateAccountUI(); });
+  if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('云同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));
   updateDefinitions(state.definitionLanguage, false); renderAudioTime(); renderAnalyticsOverview(); navigate(state.view, false);
   addEventListener('pagehide', () => analytics.flush());
   document.addEventListener('visibilitychange', () => {

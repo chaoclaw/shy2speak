@@ -4,6 +4,20 @@ const { chromium } = require('playwright');
 
 const port = 4174;
 const origin = `http://127.0.0.1:${port}`;
+const cloudState = {
+  payload: {
+    version: 1,
+    updatedAt: '2099-10-11T00:00:00Z',
+    analytics: {
+      version: 1, updatedAt: '2099-10-11T00:00:00Z', events: [], days: {}, topics: {}, chapters: {},
+      views: { practice: { practiceSeconds: 600, practiceCount: 1, recordings: 0, scores: [], lastPracticedAt: '2099-10-11T00:00:00Z' } },
+      sentences: { 'youtube-vfe7ap1kfk0:chapter-01:sentence-01': { practiceSeconds: 30, practiceCount: 2, recordings: 1, lastPracticedAt: '2099-10-11T00:00:00Z', scores: [{ total: 91, pronunciation: 92, fluency: 89, completeness: 93, words: [], createdAt: '2099-10-11T00:00:00Z' }] } },
+    },
+    profile: { nickname: 'CloudSnapshot', signature: '', avatar: 'S' }, customTopics: [], prompts: null,
+    preferences: { mode: 'light', theme: 'forest', language: 'zh', definitionLanguage: 'zh' },
+  },
+  client_updated_at: '2099-10-11T00:00:00Z',
+};
 const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: __dirname + '/..', stdio: 'ignore' });
 let browser;
 
@@ -21,6 +35,12 @@ async function main() {
     if (url.includes('youtube.com/oembed')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'Live YouTube lesson', author_name: 'Verified channel', thumbnail_url: `${origin}/icons/icon.svg` }) });
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
+    if (url === 'https://demo.supabase.co/auth/v1/settings') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ external: { email: true, phone: true } }) });
+    if (url.includes('demo.supabase.co/auth/v1/token?grant_type=password')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 3600, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
+    if (url.includes('demo.supabase.co/rest/v1/learning_states') && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify([cloudState]) });
+    if (url.includes('demo.supabase.co/rest/v1/learning_states')) return route.fulfill({ status: 201, contentType: 'application/json', body: '' });
+    if (url.includes('demo.supabase.co/rest/v1/practice_snapshots')) return route.fulfill({ status: 201, contentType: 'application/json', body: '' });
+    if (url.includes('demo.supabase.co/rest/v1/profiles')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: '00000000-0000-4000-8000-000000000001', nickname: 'CloudLearner', signature: 'Synced profile', avatar: '🚀', locale: 'zh', updated_at: '2026-10-11T00:00:00Z' }]) });
     return route.continue();
   });
 
@@ -56,9 +76,26 @@ async function main() {
   assert.equal(await page.locator('html').getAttribute('data-reduce-motion'), 'true', 'reduce motion setting should apply');
   assert.equal(await page.locator('html').getAttribute('data-high-contrast'), 'true', 'high contrast setting should apply');
   await page.click('#authPreview');
+  assert.ok((await page.locator('#modalTitle').textContent()).includes('账号服务'), 'unconfigured auth must request concrete service settings without another provider choice');
+  await page.fill('#backendUrl', 'https://demo.supabase.co');
+  await page.fill('#backendKey', 'sb_publishable_browser_test');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
+  assert.ok((await page.locator('#backendStatus').textContent()).includes('已配置'), 'successful real health check should update backend state');
+  await page.click('#authPreview');
   await page.click('[data-auth-method="phone"]');
   assert.equal(await page.locator('#authAccount').getAttribute('type'), 'tel', 'phone auth must use a separate tel input');
-  await page.locator('#appModal').evaluate((dialog) => dialog.close());
+  assert.ok((await page.locator('#modalBody').textContent()).includes('真实账号服务已连接'), 'auth dialog must no longer be a demo flow');
+  await page.click('[data-auth-method="email"]');
+  await page.fill('#authAccount', 'learner@example.com');
+  await page.fill('#authPassword', 'correct-password');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
+  await page.waitForFunction(() => document.querySelector('#backendStatus').textContent.includes('已登录'));
+  assert.equal(await page.locator('#nicknameInput').inputValue(), 'CloudLearner', 'authenticated profile should hydrate from the real backend adapter');
+  assert.ok((await page.locator('#syncStateTitle').textContent()).includes('同步'), 'login must run a learning-state synchronization');
+  assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest', 'newer cloud preferences should hydrate locally');
 
   await page.evaluate(() => window.navigate('ai'));
   assert.ok((await page.locator('[data-provider="openai"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
@@ -89,7 +126,7 @@ async function main() {
 
   assert.deepEqual(errors, [], `browser console errors: ${errors.join(' | ')}`);
   await browser.close(); browser = null;
-  console.log('ui-smoke: 8 views, responsive layouts, YouTube adapter, auth split, AI status and PWA offline reload passed');
+  console.log('ui-smoke: 8 views, responsive layouts, YouTube, Supabase auth/sync, AI status and PWA offline reload passed');
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.kill('SIGTERM'); });
