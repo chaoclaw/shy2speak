@@ -47,7 +47,7 @@ globalThis.fetch = async (input) => {
       captions: {
         playerCaptionsTracklistRenderer: {
           captionTracks: [
-            { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=zh', vssId: '.zh', languageCode: 'zh', isTranslatable: true },
+            { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=zh-Hant', vssId: '.zh-Hant', languageCode: 'zh-Hant', isTranslatable: true },
             { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=en', vssId: 'a.en', languageCode: 'en', isTranslatable: true },
           ],
         },
@@ -55,11 +55,11 @@ globalThis.fetch = async (input) => {
     });
   }
   if (String(input).includes('/api/timedtext')) {
-    if (String(input).includes('lang=zh')) {
+    if (String(input).includes('lang=zh-Hant')) {
       return Response.json({
         events: [
-          { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: '这是真实字幕。' }] },
-          { tStartMs: 1800, dDurationMs: 2200, segs: [{ utf8: '请清楚地练习。' }] },
+          { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: '這是真實字幕。' }] },
+          { tStartMs: 1800, dDurationMs: 2200, segs: [{ utf8: '請清楚地練習。' }] },
         ],
       });
     }
@@ -78,7 +78,7 @@ try {
   assert.equal(fetched.transcriptOrigin, 'youtube-auto-captions');
   assert.equal(fetched.chapters[0].sentences.length, 2);
   assert.equal(fetched.captionTranslationLanguage, 'zh-Hans');
-  assert.equal(fetched.captionTranslationSourceLanguage, 'zh');
+  assert.equal(fetched.captionTranslationSourceLanguage, 'zh-Hant');
   assert.equal(fetched.translatedSentenceCount, 2);
   assert.equal(fetched.chapters[0].sentences[0].zh, '这是真实字幕。');
 } finally {

@@ -1,4 +1,7 @@
 import { getVideoDetails } from 'youtube-caption-extractor';
+import OpenCC from 'opencc-js/t2cn';
+
+const traditionalToSimplified = OpenCC.Converter({ from: 'twp', to: 'cn' });
 
 const STOP_WORDS = new Set([
   'about', 'after', 'again', 'also', 'and', 'are', 'because', 'been', 'before', 'being', 'but', 'can', 'could',
@@ -169,7 +172,7 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
         ? 'youtube-auto-captions'
         : 'youtube-public-captions',
     captionLanguage: details.captionLanguage || 'en',
-    captionSchemaVersion: 2,
+    captionSchemaVersion: 3,
     captionTranslationLanguage: details.translationLanguage || '',
     captionTranslationSourceLanguage: details.translationSourceLanguage || '',
     translatedSentenceCount: sentences.filter((sentence) => sentence.zh).length,
@@ -180,7 +183,7 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
 
 function translationLanguageCandidates(language) {
   const candidates = [language];
-  if (/^zh(?:-|$)/i.test(language)) candidates.push('zh-CN', 'zh-Hans', 'zh');
+  if (/^zh(?:-|$)/i.test(language)) candidates.push('zh-CN', 'zh-Hans', 'zh', 'zh-Hant');
   return [...new Set(candidates.filter(Boolean).map((candidate) => candidate.toLowerCase()))];
 }
 
@@ -189,6 +192,12 @@ function directTranslationTrack(tracks, language) {
   return tracks.find((track) => candidates.includes(String(track.languageCode || '').toLowerCase()))
     || tracks.find((track) => candidates.some((candidate) => String(track.vssId || '').toLowerCase().endsWith(`.${candidate}`)))
     || null;
+}
+
+function availableTranslationLanguage(languages, language) {
+  const available = new Map(languages.map((item) => [String(item.languageCode || '').toLowerCase(), String(item.languageCode || '')]));
+  for (const candidate of translationLanguageCandidates(language)) if (available.has(candidate)) return available.get(candidate);
+  return language;
 }
 
 async function fetchTranslatedSubtitles(track, language, timedFetch, direct = false) {
@@ -215,6 +224,7 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
   if (!/^[\w-]{11}$/.test(topic?.videoId || '')) throw new Error('Invalid YouTube video ID');
   let captionTrack = null;
   let captionTracks = [];
+  let translationLanguages = [];
   const timedFetch = async (input, init = {}) => {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
@@ -229,8 +239,10 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
     if (String(input).includes('youtubei.googleapis.com/youtubei/v1/player') && response.ok) {
       try {
         const data = await response.clone().json();
-        const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+        const captionRenderer = data?.captions?.playerCaptionsTracklistRenderer || {};
+        const tracks = captionRenderer.captionTracks || [];
         if (tracks.length) captionTracks = tracks;
+        if (captionRenderer.translationLanguages?.length) translationLanguages = captionRenderer.translationLanguages;
         captionTrack = tracks.find((track) => {
           const language = String(track.languageCode || '').toLowerCase();
           const vssId = String(track.vssId || '').toLowerCase();
@@ -244,14 +256,21 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
   if (!captionTrack) throw new Error('No public English caption track is available');
   let translatedSubtitles = [];
   const translatedTrack = directTranslationTrack(captionTracks, translationLanguage);
-  try { translatedSubtitles = await fetchTranslatedSubtitles(translatedTrack || captionTrack, translationLanguage, timedFetch, Boolean(translatedTrack)); }
+  const translationSourceLanguage = translatedTrack?.languageCode
+    || availableTranslationLanguage(translationLanguages, translationLanguage);
+  try {
+    translatedSubtitles = await fetchTranslatedSubtitles(translatedTrack || captionTrack, translationSourceLanguage, timedFetch, Boolean(translatedTrack));
+    if (/^zh-(?:hant|tw|hk)/i.test(translationSourceLanguage)) {
+      translatedSubtitles = translatedSubtitles.map((row) => ({ ...row, text: traditionalToSimplified(row.text) }));
+    }
+  }
   catch (error) { console.warn('YouTube translated captions unavailable:', topic.videoId, error.message); }
   const vssId = String(captionTrack.vssId || '');
   return buildTopicFromVideoDetails(topic, {
     ...details,
     translatedSubtitles,
     translationLanguage,
-    translationSourceLanguage: translatedTrack?.languageCode || (translatedSubtitles.length ? translationLanguage : ''),
+    translationSourceLanguage: translatedSubtitles.length ? translationSourceLanguage : '',
     captionLanguage: captionTrack.languageCode || 'en',
     captionTrackKind: vssId.startsWith('a.') ? 'auto' : 'manual',
   });
