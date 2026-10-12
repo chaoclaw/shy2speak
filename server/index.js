@@ -330,20 +330,22 @@ function fallbackPlaylist(catalog, playlistId, syncError = '') {
 async function syncedPlaylist(catalog) {
   const playlistId = catalog?.source?.playlistId;
   if (!/^PL[\w-]+$/.test(playlistId || '')) return { topics: catalog.topics, videoCount: catalog.topics.length };
+  const expectedVideoCount = Math.max(1, Math.trunc(Number(catalog.source.expectedVideoCount) || 1));
   const cachedResult = await pool.query(
     'select payload, expires_at from youtube_playlist_cache where playlist_id = $1',
     [playlistId],
   );
   const cached = cachedResult.rows[0];
-  if (cached && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
+  const cachedIsComplete = Array.isArray(cached?.payload?.topics) && cached.payload.topics.length >= expectedVideoCount;
+  if (cachedIsComplete && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
   if (!YOUTUBE_PLAYLIST_SYNC_ENABLED || Number(playlistFailureCooldowns.get(playlistId) || 0) > Date.now()) {
-    return cached?.payload || fallbackPlaylist(catalog, playlistId, YOUTUBE_PLAYLIST_SYNC_ENABLED ? 'Retry cooldown active' : 'Playlist sync disabled');
+    return cachedIsComplete ? cached.payload : fallbackPlaylist(catalog, playlistId, YOUTUBE_PLAYLIST_SYNC_ENABLED ? 'Retry cooldown active' : 'Playlist sync disabled');
   }
   if (playlistSyncPromises.has(playlistId)) return playlistSyncPromises.get(playlistId);
 
   const sync = (async () => {
     try {
-      const payload = { ...(await fetchYouTubePlaylist(playlistId, catalog.topics)), syncStatus: 'synced' };
+      const payload = { ...(await fetchYouTubePlaylist(playlistId, catalog.topics, { minimumVideoCount: expectedVideoCount })), syncStatus: 'synced' };
       await pool.query(
         'insert into youtube_playlist_cache(playlist_id, payload, fetched_at, expires_at) values ($1, $2, now(), now() + ($3::text || \' hours\')::interval) on conflict (playlist_id) do update set payload = excluded.payload, fetched_at = excluded.fetched_at, expires_at = excluded.expires_at',
         [playlistId, payload, String(YOUTUBE_PLAYLIST_CACHE_HOURS)],
@@ -354,7 +356,7 @@ async function syncedPlaylist(catalog) {
     } catch (error) {
       playlistFailureCooldowns.set(playlistId, Date.now() + 10 * 60 * 1000);
       console.warn('YouTube playlist sync unavailable:', playlistId, error.message);
-      return cached?.payload || fallbackPlaylist(catalog, playlistId, error.message);
+      return cachedIsComplete ? cached.payload : fallbackPlaylist(catalog, playlistId, error.message);
     } finally {
       playlistSyncPromises.delete(playlistId);
     }

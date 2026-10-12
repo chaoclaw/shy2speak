@@ -4,6 +4,7 @@
   "source": {
     "provider": "youtube",
     "playlistId": "PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
+    "expectedVideoCount": 85,
     "playlistUrl": "https://www.youtube.com/playlist?list=PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ",
     "copyrightNotice": "视频版权归原作者及 YouTube 内容发布者所有。Shy2Speak 仅通过官方嵌入播放器播放，不下载或重新分发受版权保护的视频。"
   },

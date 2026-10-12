@@ -118,6 +118,8 @@ export function normalizePlaylistResult(result, playlistId, seedTopics = []) {
       chapters: seed.transcriptOrigin?.startsWith('youtube-') ? seed.chapters : topic.chapters,
     } : topic);
   }
+  const discoveredVideoCount = topics.length;
+  if (!discoveredVideoCount) throw new Error('The playlist provider returned no public videos');
   for (const seed of seedTopics) {
     if (!/^[\w-]{11}$/.test(seed?.videoId || '') || seen.has(seed.videoId)) continue;
     seen.add(seed.videoId);
@@ -128,16 +130,19 @@ export function normalizePlaylistResult(result, playlistId, seedTopics = []) {
     playlistId,
     title: textValue(result?.metadata?.title),
     videoCount: topics.length,
+    discoveredVideoCount,
     topics,
   };
 }
 
 export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
   timeoutMs = 20_000,
+  minimumVideoCount = 1,
   getInnertubeData = getPlaylistWithInnertube,
   getPlaylistData = GetPlaylistData,
 } = {}) {
   if (!/^PL[\w-]+$/.test(playlistId || '')) throw new Error('Invalid YouTube playlist ID');
+  const requiredCount = Math.max(1, Math.trunc(Number(minimumVideoCount) || 1));
   const runWithTimeout = async (operation) => {
     let timer;
     try {
@@ -152,13 +157,17 @@ export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
   let innertubeError;
   try {
     const result = await runWithTimeout(() => getInnertubeData(playlistId, timeoutMs));
-    return normalizePlaylistResult(result, playlistId, seedTopics);
+    const normalized = normalizePlaylistResult(result, playlistId, seedTopics);
+    if (normalized.discoveredVideoCount < requiredCount) throw new Error(`Innertube returned only ${normalized.discoveredVideoCount} of ${requiredCount} expected videos`);
+    return normalized;
   } catch (error) {
     innertubeError = error;
   }
   try {
     const result = await runWithTimeout(() => getPlaylistData(playlistId, 100));
-    return normalizePlaylistResult(result, playlistId, seedTopics);
+    const normalized = normalizePlaylistResult(result, playlistId, seedTopics);
+    if (normalized.discoveredVideoCount < requiredCount) throw new Error(`page fallback returned only ${normalized.discoveredVideoCount} of ${requiredCount} expected videos`);
+    return normalized;
   } catch (fallbackError) {
     throw new Error(`YouTube playlist APIs unavailable (Innertube: ${innertubeError?.message || 'unknown'}; page fallback: ${fallbackError.message})`);
   }
