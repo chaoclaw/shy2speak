@@ -172,10 +172,12 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
         ? 'youtube-auto-captions'
         : 'youtube-public-captions',
     captionLanguage: details.captionLanguage || 'en',
-    captionSchemaVersion: 4,
+    captionSchemaVersion: 5,
     captionTranslationLanguage: details.translationLanguage || '',
     captionTranslationSourceLanguage: details.translationSourceLanguage || '',
     translatedSentenceCount: sentences.filter((sentence) => sentence.zh).length,
+    captionTranslationStatus: details.translationStatus || (sentences.some((sentence) => sentence.zh) ? 'synced' : 'unavailable'),
+    ...(details.translationError ? { captionTranslationError: details.translationError } : {}),
     captionSyncedAt: syncedAt,
     chapters,
   };
@@ -200,45 +202,74 @@ function availableTranslationLanguage(languages, language) {
   return language;
 }
 
-async function fetchTranslatedSubtitles(track, language, timedFetch, direct = false) {
-  if (!language || !track?.baseUrl || (!direct && track.isTranslatable === false)) return [];
-  const url = new URL(track.baseUrl);
-  url.searchParams.set('fmt', 'json3');
-  if (!direct) url.searchParams.set('tlang', language);
-  const response = await timedFetch(url);
-  const body = await response.text();
+function parseJson3Captions(body) {
   let events = [];
-  if (response.ok && body.trim()) {
-    try { events = JSON.parse(body).events || []; } catch { /* Older translated tracks use XML instead. */ }
-  }
-  const rows = events.flatMap((event) => {
+  try { events = JSON.parse(body).events || []; } catch { return []; }
+  return events.flatMap((event) => {
     if (!event.segs || event.aAppend === 1) return [];
     const text = cleanCaption(event.segs.map((segment) => segment.utf8 || '').join(''));
     if (!text) return [];
-    return [{
-      start: String(Number(event.tStartMs || 0) / 1000),
-      dur: String(Number(event.dDurationMs || 0) / 1000),
-      text,
-    }];
+    return [{ start: String(Number(event.tStartMs || 0) / 1000), dur: String(Number(event.dDurationMs || 0) / 1000), text }];
   });
-  if (rows.length) return rows;
+}
 
-  const xmlUrl = new URL(url);
-  xmlUrl.searchParams.delete('fmt');
-  const xmlResponse = await timedFetch(xmlUrl);
-  const xml = await xmlResponse.text();
-  const xmlRows = [];
-  for (const match of xml.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)) {
+function parseXmlCaptions(body) {
+  const rows = [];
+  for (const match of body.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)) {
     const start = match[1].match(/\bstart="([^"]+)"/i)?.[1];
     const dur = match[1].match(/\bdur="([^"]+)"/i)?.[1] || '0';
     const text = cleanCaption(match[2]);
-    if (Number.isFinite(Number(start)) && text) xmlRows.push({ start, dur, text });
+    if (Number.isFinite(Number(start)) && text) rows.push({ start, dur, text });
   }
-  if (xmlRows.length) return xmlRows;
-  if (!response.ok || !xmlResponse.ok) {
-    throw new Error(`Translated caption fetch failed: json3=${response.status}, xml=${xmlResponse.status}`);
+  for (const match of body.matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/gi)) {
+    const startMs = match[1].match(/\bt="([^"]+)"/i)?.[1];
+    const durationMs = match[1].match(/\bd="([^"]+)"/i)?.[1] || '0';
+    const text = cleanCaption(match[2].replace(/<\/s>\s*<s\b[^>]*>/gi, ' '));
+    if (Number.isFinite(Number(startMs)) && text) rows.push({ start: String(Number(startMs) / 1000), dur: String(Number(durationMs) / 1000), text });
   }
-  return [];
+  return rows.sort((left, right) => Number(left.start) - Number(right.start));
+}
+
+function vttTimestampSeconds(value) {
+  const parts = String(value).split(':').map(Number);
+  return parts.some((part) => !Number.isFinite(part)) ? NaN : parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+function parseVttCaptions(body) {
+  const rows = [];
+  const blocks = String(body).replace(/\r/g, '').split(/\n{2,}/);
+  for (const block of blocks) {
+    const lines = block.split('\n').filter(Boolean);
+    const timingIndex = lines.findIndex((line) => line.includes('-->'));
+    if (timingIndex < 0) continue;
+    const [startValue, endValue] = lines[timingIndex].split('-->').map((value) => value.trim().split(/\s+/)[0]);
+    const start = vttTimestampSeconds(startValue); const end = vttTimestampSeconds(endValue);
+    const text = cleanCaption(lines.slice(timingIndex + 1).join(' '));
+    if (Number.isFinite(start) && Number.isFinite(end) && text) rows.push({ start: String(start), dur: String(Math.max(0, end - start)), text });
+  }
+  return rows;
+}
+
+async function fetchTranslatedSubtitles(track, language, timedFetch, direct = false) {
+  if (!language || !track?.baseUrl || (!direct && track.isTranslatable === false)) return [];
+  const attempts = [
+    { name: 'json3', format: 'json3', parse: parseJson3Captions },
+    { name: 'srv3', format: 'srv3', parse: parseXmlCaptions },
+    { name: 'xml', format: '', parse: parseXmlCaptions },
+    { name: 'vtt', format: 'vtt', parse: parseVttCaptions },
+  ];
+  const diagnostics = [];
+  for (const attempt of attempts) {
+    const url = new URL(track.baseUrl);
+    if (attempt.format) url.searchParams.set('fmt', attempt.format); else url.searchParams.delete('fmt');
+    if (!direct) url.searchParams.set('tlang', language);
+    const response = await timedFetch(url);
+    const body = await response.text();
+    const rows = response.ok && body.trim() ? attempt.parse(body) : [];
+    diagnostics.push(`${attempt.name}=${response.status}/${String(response.headers.get('content-type') || 'unknown').split(';')[0]}/${body.length}`);
+    if (rows.length) return rows;
+  }
+  throw new Error(`No translated caption rows (${diagnostics.join(', ')})`);
 }
 
 export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translationLanguage = 'zh-Hans' } = {}) {
@@ -276,6 +307,7 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
   const details = await getVideoDetails({ videoID: topic.videoId, lang: 'en', fetch: timedFetch });
   if (!captionTrack) throw new Error('No public English caption track is available');
   let translatedSubtitles = [];
+  let translationError = '';
   const translatedTrack = directTranslationTrack(captionTracks, translationLanguage);
   const translationSourceLanguage = translatedTrack?.languageCode
     || availableTranslationLanguage(translationLanguages, translationLanguage);
@@ -285,13 +317,15 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
       translatedSubtitles = translatedSubtitles.map((row) => ({ ...row, text: traditionalToSimplified(row.text) }));
     }
   }
-  catch (error) { console.warn('YouTube translated captions unavailable:', topic.videoId, error.message); }
+  catch (error) { translationError = error.message; console.warn('YouTube translated captions unavailable:', topic.videoId, error.message); }
   const vssId = String(captionTrack.vssId || '');
   return buildTopicFromVideoDetails(topic, {
     ...details,
     translatedSubtitles,
     translationLanguage,
     translationSourceLanguage: translatedSubtitles.length ? translationSourceLanguage : '',
+    translationStatus: translatedSubtitles.length ? 'synced' : 'unavailable',
+    translationError,
     captionLanguage: captionTrack.languageCode || 'en',
     captionTrackKind: vssId.startsWith('a.') ? 'auto' : 'manual',
   });

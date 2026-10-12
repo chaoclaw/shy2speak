@@ -305,7 +305,7 @@ async function hydratedYouTubeTopic(topic) {
   );
   const cached = cachedResult.rows[0];
   const cachedHasCurrentTranslation = !YOUTUBE_CAPTION_TRANSLATION_LANGUAGE
-    || (cached?.payload?.captionSchemaVersion === 4
+    || (cached?.payload?.captionSchemaVersion === 5
       && cached.payload.captionTranslationLanguage === YOUTUBE_CAPTION_TRANSLATION_LANGUAGE);
   if (cached && cachedHasCurrentTranslation && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
   if (!YOUTUBE_CAPTIONS_ENABLED || Number(captionFailureCooldowns.get(topic.videoId) || 0) > Date.now()) {
@@ -504,7 +504,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v27',
+    release: 'v28',
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
