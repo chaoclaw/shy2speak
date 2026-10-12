@@ -19,6 +19,10 @@ catalogFixture.topics[0].chapters = [
   },
   { id: 'chapter-02', index: 2, title: 'Pending section', titleZh: '待同步小节', start: 8, durationLabel: '待同步', previewWords: [], sentences: [] },
 ];
+catalogFixture.topics[0].chapters.push({
+  id: 'chapter-03', index: 3, title: 'Long transcript', titleZh: '长字幕测试', start: 20, durationLabel: '4:00', previewWords: [],
+  sentences: Array.from({ length: 80 }, (_, index) => ({ id: `long-sentence-${index + 1}`, start: 20 + index * 3, end: 23 + index * 3, en: `Long listening sentence ${index + 1}.`, zh: `长字幕测试第 ${index + 1} 句。`, words: [] })),
+});
 catalogFixture.topics = Array.from({ length: 85 }, (_, index) => {
   if (index === 0) return catalogFixture.topics[0];
   const videoId = `TEST${String(index).padStart(7, '0')}`;
@@ -96,7 +100,7 @@ async function main() {
   assert.equal(anonymousMobileOverflow.overflow, false, `anonymous sign-in affordance must not overflow the mobile header: ${JSON.stringify(anonymousMobileOverflow)}`);
   await page.setViewportSize({ width: 1440, height: 900 });
   assert.ok((await page.locator('#topicSelect option').first().textContent()).includes('商场英语词汇'), 'topic picker should show English and the current-language title');
-  assert.equal(await page.locator('.chapters-card .chapter').count(), 2, 'catalog chapters should render');
+  assert.equal(await page.locator('.chapters-card .chapter').count(), 3, 'catalog chapters should render');
   assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 2, 'server-synced sentence lyrics should render');
 
   await page.locator('.side-nav .nav-item').first().hover();
@@ -230,10 +234,26 @@ async function main() {
   assert.ok(playlistSelectLayout.fieldsFit, 'new-playlist fields must remain inside the modal');
   assert.ok(playlistSelectLayout.arrowPosition.includes('12px'), 'select arrow should have comfortable right-edge spacing');
   await page.locator('#appModal').evaluate((dialog) => dialog.close());
-  await page.locator('#listeningQueue .queue-track').nth(2).click();
+  await page.locator('#listeningQueue .queue-track').nth(1).click();
   await page.waitForSelector('.listening-youtube-frame');
   assert.equal(await page.locator('#audioPlay').textContent(), 'Ⅱ', 'clicking a listening queue item should start playback');
   assert.equal(await page.locator('.youtube-frame').count(), 0, 'listening playback must not leave the practice player running');
+  assert.equal(await page.locator('#listeningLines .listen-line').count(), 82, 'long listening transcripts should render inside the lyrics card');
+  const listeningLayout = await page.evaluate(() => {
+    const playerCard = document.querySelector('.audio-player').getBoundingClientRect();
+    const stage = document.querySelector('#listeningVideoStage').getBoundingClientRect();
+    const frame = document.querySelector('.listening-youtube-frame').getBoundingClientRect();
+    const lyrics = document.querySelector('#listeningLines');
+    return { playerHeight: playerCard.height, frameVisible: frame.top >= stage.top && frame.bottom <= stage.bottom, lyricsScrollable: lyrics.scrollHeight > lyrics.clientHeight };
+  });
+  assert.ok(listeningLayout.playerHeight <= 760 && listeningLayout.frameVisible, `listening player must remain visible with a long transcript: ${JSON.stringify(listeningLayout)}`);
+  assert.equal(listeningLayout.lyricsScrollable, true, 'long lyrics should scroll inside their card');
+  await page.evaluate(() => {
+    const frame = document.querySelector('.listening-youtube-frame');
+    dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, origin: 'https://www.youtube-nocookie.com', data: JSON.stringify({ event: 'infoDelivery', info: { currentTime: 120, duration: 260 } }) }));
+  });
+  await page.waitForFunction(() => Number(document.querySelector('#listeningLines .listen-line.active')?.dataset.start || 0) >= 119);
+  await page.waitForFunction(() => document.querySelector('#listeningLines').scrollTop > 0);
   await page.click('#nextAudio');
   assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('/ 85'), 'listening next-track control should move through the 85-video queue');
   await page.evaluate(() => window.navigate('practice'));

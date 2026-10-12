@@ -651,7 +651,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=30', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=31', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1410,7 +1410,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=30', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=31', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1477,6 +1477,22 @@ function renderAudioTime() {
   const durationSeconds = String(Math.floor(state.audioDuration % 60)).padStart(2, '0');
   $('#audioDuration').textContent = `${durationMinutes}:${durationSeconds}`;
   $('#audioProgress').style.width = `${state.audioDuration ? Math.min(100, (state.audioTime / state.audioDuration) * 100) : 0}%`;
+  syncListeningLyrics();
+}
+
+function syncListeningLyrics() {
+  const container = $('#listeningLines');
+  const lines = container ? $$('.listen-line', container) : [];
+  if (!lines.length) return;
+  const offset = Number($('#timelineRange')?.value || 0) / 10;
+  const captionTime = Math.max(0, state.audioTime - offset);
+  let activeIndex = 0;
+  lines.forEach((line, index) => { if (Number(line.dataset.start || 0) <= captionTime) activeIndex = index; });
+  const active = lines[activeIndex];
+  if (active.classList.contains('active')) return;
+  lines.forEach((line) => { line.classList.toggle('active', line === active); line.toggleAttribute('aria-current', line === active); });
+  const top = Math.max(0, active.offsetTop - (container.clientHeight - active.offsetHeight) / 2);
+  container.scrollTo({ top, behavior: document.documentElement.dataset.reduceMotion === 'true' ? 'auto' : 'smooth' });
 }
 
 function storedListeningPlaylists() {
@@ -1609,8 +1625,8 @@ function renderListeningLyrics(topic) {
     const line = document.createElement('div'); line.className = `listen-line${index === 0 ? ' active' : ''}`; line.dataset.index = index; line.dataset.start = sentence.start; line.dataset.en = sentence.en; line.dataset.zh = sentence.zh || '';
     const english = document.createElement('strong'); appendListeningText(english, sentence);
     const translated = document.createElement('small'); translated.textContent = sentence.zh || '';
-    if (index === 0) { const current = document.createElement('em'); current.textContent = state.language === 'en' ? 'First caption' : '首句字幕'; line.append(english, translated, current); }
-    else line.append(english, translated);
+    const current = document.createElement('em'); current.textContent = state.language === 'en' ? 'Current caption' : '当前歌词';
+    line.append(english, translated, current);
     lines.append(line);
   });
   const activeLanguage = $('#lyricsLanguage button.active')?.dataset.lang || 'bi';
@@ -1633,7 +1649,7 @@ function renderListeningPlaylist({ resetTime = true } = {}) {
   $('#listeningPoster').src = topic.thumbnail || `https://i.ytimg.com/vi/${topic.videoId}/hqdefault.jpg`;
   $('#listeningPoster').alt = topic.title;
   if (resetTime) { state.audioTime = 0; state.audioDuration = parseDurationLabel(topic.durationLabel); }
-  renderAudioTime(); renderListeningLyrics(topic);
+  renderListeningLyrics(topic); renderAudioTime();
 }
 
 function sendListeningPlayerCommand(func, args = []) {
@@ -1788,7 +1804,7 @@ function setupListening() {
   $('#listeningLines').addEventListener('click', (event) => {
     const line = event.target.closest('.listen-line'); if (!line || event.target.closest('mark')) return;
     state.audioTime = Number(line.dataset.start || 0); sendListeningPlayerCommand('seekTo', [state.audioTime, true]);
-    $$('.listen-line').forEach((item) => item.classList.toggle('active', item === line));
+    renderAudioTime();
     if (!state.audioPlaying) playListeningTrack();
   });
   $('#audioPlay').addEventListener('click', () => {
@@ -1852,9 +1868,10 @@ function setupListening() {
   $('#timelineRange').addEventListener('input', (event) => {
     const value = Number(event.target.value) / 10;
     $('#timelineOffset').textContent = `${value > 0 ? '+' : ''}${value.toFixed(1)}s`;
+    renderAudioTime();
   });
   $('#timelineRange').addEventListener('change', () => toast('个人歌词时间轴已保存。'));
-  $('#restoreTimeline').addEventListener('click', () => { $('#timelineRange').value = 0; $('#timelineOffset').textContent = '0.0s'; toast('已恢复官方默认时间轴。'); });
+  $('#restoreTimeline').addEventListener('click', () => { $('#timelineRange').value = 0; $('#timelineOffset').textContent = '0.0s'; renderAudioTime(); toast('已恢复官方默认时间轴。'); });
   $('#newPlaylist').addEventListener('click', () => showModal({
     eyebrow: 'NEW PLAYLIST', title: '新建磨耳朵列表',
     body: `<div class="modal-field"><label for="newListeningPlaylistName">列表名称</label><input id="newListeningPlaylistName" value="新的听力列表" maxlength="40"></div><div class="modal-field"><label for="newListeningPlaylistSort">初始排序</label><select id="newListeningPlaylistSort"><option value="course">课程顺序</option><option value="weak">练习次数少的优先</option><option value="recent">最近练习优先</option></select></div><div class="warning-box"><span>85</span><p><strong>从真实课程创建</strong><br><small>新列表会包含当前的 YouTube 课程，创建后可拖动调整。</small></p></div>`,
