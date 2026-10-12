@@ -46,13 +46,16 @@ globalThis.fetch = async (input) => {
       videoDetails: { title: 'Fetched title', shortDescription: '0:00 Full lesson' },
       captions: {
         playerCaptionsTracklistRenderer: {
-          captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0', vssId: 'a.en', languageCode: 'en', isTranslatable: true }],
+          captionTracks: [
+            { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=zh', vssId: '.zh', languageCode: 'zh', isTranslatable: true },
+            { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=en', vssId: 'a.en', languageCode: 'en', isTranslatable: true },
+          ],
         },
       },
     });
   }
   if (String(input).includes('/api/timedtext')) {
-    if (String(input).includes('tlang=zh-Hans')) {
+    if (String(input).includes('lang=zh')) {
       return Response.json({
         events: [
           { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: '这是真实字幕。' }] },
@@ -75,6 +78,7 @@ try {
   assert.equal(fetched.transcriptOrigin, 'youtube-auto-captions');
   assert.equal(fetched.chapters[0].sentences.length, 2);
   assert.equal(fetched.captionTranslationLanguage, 'zh-Hans');
+  assert.equal(fetched.captionTranslationSourceLanguage, 'zh');
   assert.equal(fetched.translatedSentenceCount, 2);
   assert.equal(fetched.chapters[0].sentences[0].zh, '这是真实字幕。');
 } finally {

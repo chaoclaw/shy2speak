@@ -169,18 +169,33 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
         ? 'youtube-auto-captions'
         : 'youtube-public-captions',
     captionLanguage: details.captionLanguage || 'en',
+    captionSchemaVersion: 2,
     captionTranslationLanguage: details.translationLanguage || '',
+    captionTranslationSourceLanguage: details.translationSourceLanguage || '',
     translatedSentenceCount: sentences.filter((sentence) => sentence.zh).length,
     captionSyncedAt: syncedAt,
     chapters,
   };
 }
 
-async function fetchTranslatedSubtitles(track, language, timedFetch) {
-  if (!language || !track?.baseUrl || track.isTranslatable === false) return [];
+function translationLanguageCandidates(language) {
+  const candidates = [language];
+  if (/^zh(?:-|$)/i.test(language)) candidates.push('zh-CN', 'zh-Hans', 'zh');
+  return [...new Set(candidates.filter(Boolean).map((candidate) => candidate.toLowerCase()))];
+}
+
+function directTranslationTrack(tracks, language) {
+  const candidates = translationLanguageCandidates(language);
+  return tracks.find((track) => candidates.includes(String(track.languageCode || '').toLowerCase()))
+    || tracks.find((track) => candidates.some((candidate) => String(track.vssId || '').toLowerCase().endsWith(`.${candidate}`)))
+    || null;
+}
+
+async function fetchTranslatedSubtitles(track, language, timedFetch, direct = false) {
+  if (!language || !track?.baseUrl || (!direct && track.isTranslatable === false)) return [];
   const url = new URL(track.baseUrl);
   url.searchParams.set('fmt', 'json3');
-  url.searchParams.set('tlang', language);
+  if (!direct) url.searchParams.set('tlang', language);
   const response = await timedFetch(url);
   if (!response.ok) throw new Error(`Translated caption fetch failed: ${response.status}`);
   const payload = await response.json();
@@ -199,6 +214,7 @@ async function fetchTranslatedSubtitles(track, language, timedFetch) {
 export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translationLanguage = 'zh-Hans' } = {}) {
   if (!/^[\w-]{11}$/.test(topic?.videoId || '')) throw new Error('Invalid YouTube video ID');
   let captionTrack = null;
+  let captionTracks = [];
   const timedFetch = async (input, init = {}) => {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
@@ -214,6 +230,7 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
       try {
         const data = await response.clone().json();
         const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+        if (tracks.length) captionTracks = tracks;
         captionTrack = tracks.find((track) => {
           const language = String(track.languageCode || '').toLowerCase();
           const vssId = String(track.vssId || '').toLowerCase();
@@ -226,13 +243,15 @@ export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translation
   const details = await getVideoDetails({ videoID: topic.videoId, lang: 'en', fetch: timedFetch });
   if (!captionTrack) throw new Error('No public English caption track is available');
   let translatedSubtitles = [];
-  try { translatedSubtitles = await fetchTranslatedSubtitles(captionTrack, translationLanguage, timedFetch); }
+  const translatedTrack = directTranslationTrack(captionTracks, translationLanguage);
+  try { translatedSubtitles = await fetchTranslatedSubtitles(translatedTrack || captionTrack, translationLanguage, timedFetch, Boolean(translatedTrack)); }
   catch (error) { console.warn('YouTube translated captions unavailable:', topic.videoId, error.message); }
   const vssId = String(captionTrack.vssId || '');
   return buildTopicFromVideoDetails(topic, {
     ...details,
     translatedSubtitles,
     translationLanguage,
+    translationSourceLanguage: translatedTrack?.languageCode || (translatedSubtitles.length ? translationLanguage : ''),
     captionLanguage: captionTrack.languageCode || 'en',
     captionTrackKind: vssId.startsWith('a.') ? 'auto' : 'manual',
   });
