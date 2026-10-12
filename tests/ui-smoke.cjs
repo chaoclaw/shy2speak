@@ -217,6 +217,8 @@ async function main() {
   await page.locator('#listeningQueue .queue-track').first().dragTo(page.locator('#listeningQueue .queue-track').nth(1));
   assert.notEqual(await page.locator('#listeningQueue .queue-track strong').first().textContent(), firstListeningTitle, 'dragging must persistently reorder listening tracks');
   assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('shy-listening-course-order-v1') || '[]').length)), 85, 'edited course order must be persisted');
+  await page.locator('#listeningQueue .queue-track').first().click();
+  assert.equal(await page.locator('.listening-youtube-frame').count(), 0, 'clicking a queue item in edit mode should not start playback');
   await page.click('#editPlaylist');
   await page.click('#newPlaylist');
   const playlistSelectLayout = await page.evaluate(() => {
@@ -228,8 +230,9 @@ async function main() {
   assert.ok(playlistSelectLayout.fieldsFit, 'new-playlist fields must remain inside the modal');
   assert.ok(playlistSelectLayout.arrowPosition.includes('12px'), 'select arrow should have comfortable right-edge spacing');
   await page.locator('#appModal').evaluate((dialog) => dialog.close());
-  await page.click('#audioPlay');
+  await page.locator('#listeningQueue .queue-track').nth(2).click();
   await page.waitForSelector('.listening-youtube-frame');
+  assert.equal(await page.locator('#audioPlay').textContent(), 'Ⅱ', 'clicking a listening queue item should start playback');
   assert.equal(await page.locator('.youtube-frame').count(), 0, 'listening playback must not leave the practice player running');
   await page.click('#nextAudio');
   assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('/ 85'), 'listening next-track control should move through the 85-video queue');

@@ -651,7 +651,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=29', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=30', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1410,7 +1410,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=29', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=30', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1767,10 +1767,10 @@ function setupListening() {
     const row = event.target.closest('.queue-track'); if (!row) return;
     const move = event.target.closest('[data-move]');
     if (move) { event.stopPropagation(); moveListeningTrack(Number(row.dataset.queueIndex), Number(row.dataset.queueIndex) + Number(move.dataset.move)); return; }
-    selectListeningTrack(Number(row.dataset.queueIndex), false);
+    selectListeningTrack(Number(row.dataset.queueIndex), !state.listeningEditMode);
   });
   $('#listeningQueue').addEventListener('keydown', (event) => {
-    const row = event.target.closest('.queue-track'); if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); selectListeningTrack(Number(row.dataset.queueIndex), false); }
+    const row = event.target.closest('.queue-track'); if (row && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); selectListeningTrack(Number(row.dataset.queueIndex), !state.listeningEditMode); }
   });
   $('#listeningQueue').addEventListener('dragstart', (event) => {
     const row = event.target.closest('.queue-track'); if (!state.listeningEditMode || !row) return;

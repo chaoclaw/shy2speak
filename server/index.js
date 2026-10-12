@@ -504,7 +504,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v29',
+    release: 'v30',
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
