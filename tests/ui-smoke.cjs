@@ -162,6 +162,11 @@ async function main() {
   await page.waitForSelector('.youtube-frame');
   assert.equal(await page.locator('#practiceTopicTitle').textContent(), '1. Live YouTube lesson', 'runtime YouTube metadata should update the numbered title');
   assert.equal(await page.locator('.youtube-frame').count(), 1, 'official YouTube player should be mounted');
+  const initialPracticeFrame = page.frames().find((frame) => frame.url().includes('youtube-nocookie.com/embed/'));
+  assert.ok(initialPracticeFrame, 'the practice player should be available');
+  await initialPracticeFrame.evaluate(() => parent.postMessage(JSON.stringify({ event: 'onStateChange', info: 1 }), '*'));
+  await page.waitForFunction(() => document.querySelector('.youtube-frame')?.dataset.playbackState === 'playing');
+  assert.equal(await page.locator('.youtube-frame').getAttribute('data-playback-state'), 'playing', 'a real video-playing event should mark practice playback active');
 
   await page.locator('.chapter').nth(1).click();
   assert.ok((await page.locator('.lyrics-empty').textContent()).includes('尚未同步'), 'chapter without transcript should show an honest empty state');
@@ -170,6 +175,7 @@ async function main() {
   assert.equal(await page.locator('[data-view-link="downloads"]').count(), 0, 'offline content navigation should be removed');
   await page.evaluate(() => window.navigate('downloads'));
   assert.ok(await page.locator('#view-overview').evaluate((node) => node.classList.contains('active')), 'legacy offline route should fall back to overview');
+  assert.equal(await page.locator('.youtube-frame').getAttribute('data-playback-state'), 'paused', 'leaving video practice must pause the video');
 
   const views = ['overview', 'vocabulary', 'listening', 'studio', 'ai', 'settings'];
   for (const view of views) {
@@ -251,7 +257,7 @@ async function main() {
   await page.waitForSelector('.listening-audio-engine', { state: 'attached' });
   assert.equal(await page.locator('#audioPlay').textContent(), 'Ⅱ', 'clicking a listening queue item should start playback');
   assert.equal(await page.locator('.listening-youtube-frame').count(), 0, 'self-hosted listening should prefer an audio-only stream');
-  assert.equal(await page.locator('.youtube-frame').count(), 0, 'listening playback must not leave the practice player running');
+  assert.equal(await page.locator('.youtube-frame').getAttribute('data-playback-state'), 'paused', 'listening playback must pause the practice video');
   assert.equal(await page.locator('#listeningLines .listen-line').count(), 82, 'long listening transcripts should render inside the lyrics card');
   const listeningLayout = await page.evaluate(() => {
     const playerCard = document.querySelector('.audio-player').getBoundingClientRect();
@@ -268,7 +274,21 @@ async function main() {
   await page.click('#nextAudio');
   assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('/ 85'), 'listening next-track control should move through the 85-video queue');
   await page.evaluate(() => window.navigate('practice'));
-  assert.equal(await page.locator('.listening-audio-engine').count(), 0, 'opening video practice must stop listening playback');
+  assert.equal(await page.locator('.listening-audio-engine').count(), 1, 'opening video practice without playing video must keep listening audio mounted');
+  assert.equal(await page.locator('#audioPlay').textContent(), 'Ⅱ', 'opening video practice without playing video must keep audio playing');
+  assert.equal(await page.locator('.listening-audio-engine').evaluate((audio) => audio.paused), false, 'audio media must continue while merely viewing the video tab');
+  const practiceFrame = page.frames().find((frame) => frame.url().includes('youtube-nocookie.com/embed/'));
+  assert.ok(practiceFrame, 'the paused practice player should remain available for resume');
+  await practiceFrame.evaluate(() => parent.postMessage(JSON.stringify({ event: 'onStateChange', info: 1 }), '*'));
+  await page.waitForFunction(() => document.querySelector('#audioPlay')?.textContent === '▶');
+  assert.equal(await page.locator('#audioPlay').textContent(), '▶', 'starting video must pause listening audio');
+  assert.equal(await page.locator('.listening-audio-engine').evaluate((audio) => audio.paused), true, 'the audio media element must pause only after video starts');
+  assert.equal(await page.locator('.youtube-frame').getAttribute('data-playback-state'), 'playing', 'video should play after taking over from audio');
+  await page.setViewportSize({ width: 1440, height: 400 });
+  await page.locator('#view-practice .history-card').scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelector('.youtube-frame')?.dataset.playbackState === 'paused');
+  assert.equal(await page.locator('.youtube-frame').getAttribute('data-playback-state'), 'paused', 'video must pause after leaving the viewport');
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.click('#notificationButton');
   assert.ok((await page.locator('#modalTitle').textContent()).includes('通知'), 'notification button should open the notification center');

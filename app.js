@@ -6,6 +6,7 @@ const state = {
   mode: localStorage.getItem('shy-mode') || 'light',
   theme: localStorage.getItem('shy-theme') || 'violet',
   language: localStorage.getItem('shy-language') || 'zh',
+  practiceVideoPlaying: false,
   audioPlaying: false,
   audioTime: 0,
   audioDuration: 0,
@@ -659,7 +660,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=34', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=35', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -828,12 +829,46 @@ async function refreshYouTubeMetadata(topic) {
 function resetYouTubePlayer() {
   $('.youtube-frame')?.remove();
   $('#videoStage')?.classList.remove('video-live');
+  state.practiceVideoPlaying = false;
+}
+
+function sendPracticePlayerCommand(func, args = []) {
+  $('.youtube-frame')?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
+}
+
+function pausePracticeVideo() {
+  const frame = $('.youtube-frame');
+  if (!frame) return;
+  sendPracticePlayerCommand('pauseVideo');
+  state.practiceVideoPlaying = false;
+  frame.dataset.playbackState = 'paused';
+}
+
+function handlePracticePlayerMessage(event) {
+  const frame = $('.youtube-frame');
+  if (!frame || event.source !== frame.contentWindow) return;
+  try { if (!/youtube(?:-nocookie)?\.com$/.test(new URL(event.origin).hostname)) return; } catch { return; }
+  let payload;
+  try { payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
+  if (payload?.event !== 'onStateChange') return;
+  const playerState = Number(payload.info?.playerState ?? payload.info);
+  if (playerState === 1) {
+    const stageVisible = $('#videoStage')?.dataset.inViewport !== 'false';
+    if (document.hidden || state.view !== 'practice' || !stageVisible) { pausePracticeVideo(); return; }
+    state.practiceVideoPlaying = true;
+    frame.dataset.playbackState = 'playing';
+    if (state.audioPlaying) pauseListeningTrack();
+  }
+  if (playerState === 0 || playerState === 2) {
+    state.practiceVideoPlaying = false;
+    frame.dataset.playbackState = 'paused';
+  }
 }
 
 function loadYouTubePlayer(start = 0, autoplay = true) {
   const topic = currentTopic();
   if (!topic?.videoId) return;
-  stopListeningSpeech();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   refreshYouTubeMetadata(topic);
   let frame = $('.youtube-frame');
   if (!frame) {
@@ -842,18 +877,28 @@ function loadYouTubePlayer(start = 0, autoplay = true) {
     frame.title = topic.title;
     frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
     frame.allowFullscreen = true;
-    const params = new URLSearchParams({ autoplay: autoplay ? '1' : '0', playsinline: '1', enablejsapi: '1', rel: '0', start: String(Math.max(0, Math.floor(start))) });
+    frame.dataset.playbackState = autoplay ? 'loading' : 'paused';
+    const params = new URLSearchParams({ autoplay: '0', playsinline: '1', enablejsapi: '1', rel: '0', origin: location.origin, start: String(Math.max(0, Math.floor(start))) });
     if (topic.playlistId) params.set('list', topic.playlistId);
     frame.src = `https://www.youtube-nocookie.com/embed/${topic.videoId}?${params}`;
+    frame.addEventListener('load', () => {
+      sendPracticePlayerCommand('addEventListener', ['onStateChange']);
+      if (autoplay) sendPracticePlayerCommand('playVideo');
+    });
     $('#videoStage').append(frame);
     $('#videoStage').classList.add('video-live');
+    state.practiceVideoPlaying = false;
     analytics.increment('topics', topic.id, 'practiceCount');
     if (currentChapter()) analytics.increment('chapters', `${topic.id}:${currentChapter().id}`, 'practiceCount');
     analytics.begin('topics', topic.id);
     if (currentChapter()) analytics.begin('chapters', `${topic.id}:${currentChapter().id}`);
   } else {
     frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [Number(start), true] }), '*');
-    if (autoplay) frame.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+    if (autoplay) {
+      sendPracticePlayerCommand('playVideo');
+      state.practiceVideoPlaying = false;
+      frame.dataset.playbackState = 'loading';
+    }
   }
 }
 
@@ -1003,8 +1048,8 @@ function navigate(view, push = true) {
   const previousView = state.view;
   analytics.end('views');
   if (state.view === 'practice' && view !== 'practice') { analytics.end('topics'); analytics.end('chapters'); analytics.end('sentences'); }
-  if (previousView === 'practice' && view !== 'practice') resetYouTubePlayer();
-  if (view === 'practice' && previousView !== 'practice') stopListeningSpeech();
+  if (previousView === 'practice' && view !== 'practice') pausePracticeVideo();
+  if (view === 'practice' && previousView !== 'practice' && 'speechSynthesis' in window) speechSynthesis.cancel();
   state.view = view;
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
   $$('[data-view-link]').forEach((button) => button.classList.toggle('active', button.dataset.viewLink === view && (button.classList.contains('nav-item') || button.closest('.mobile-nav'))));
@@ -1318,6 +1363,16 @@ async function getMicrophoneInfo() {
 }
 
 function setupPractice() {
+  addEventListener('message', handlePracticePlayerMessage);
+  const videoStage = $('#videoStage');
+  if ('IntersectionObserver' in window && videoStage) {
+    const observer = new IntersectionObserver(([entry]) => {
+      const inViewport = Boolean(entry?.isIntersecting && entry.intersectionRatio > 0);
+      videoStage.dataset.inViewport = String(inViewport);
+      if (!inViewport) pausePracticeVideo();
+    }, { threshold: [0, 0.01] });
+    observer.observe(videoStage);
+  }
   bindPracticeLines();
   $('#recordButton').addEventListener('click', () => state.mediaRecorder?.state === 'recording' ? stopRecording() : startRecording());
   $('#micDeviceButton').addEventListener('click', async () => {
@@ -1418,7 +1473,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=34', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=35', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1738,7 +1793,7 @@ function mountListeningAudioEngine(topic) {
 function playListeningTrack() {
   const topic = currentListeningTopic();
   if (!topic?.videoId) { toast('该列表暂无可播放内容。'); return; }
-  resetYouTubePlayer();
+  pausePracticeVideo();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (!$('.listening-audio-engine') && !$('.listening-youtube-frame')) {
     if (!mountListeningAudioEngine(topic)) mountListeningYouTubeEngine(topic);
@@ -2453,7 +2508,7 @@ async function init() {
   updateDefinitions(state.definitionLanguage, false); renderAudioTime(); renderAnalyticsOverview(); navigate(state.view, false);
   addEventListener('pagehide', () => analytics.flush());
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) analytics.flush();
+    if (document.hidden) { pausePracticeVideo(); analytics.flush(); }
     else {
       analytics.begin('views', state.view);
       if (state.view === 'practice' && currentTopic()) {
