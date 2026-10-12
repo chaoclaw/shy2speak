@@ -121,12 +121,12 @@ async function main() {
   await page.locator('#languageToggle').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === 'Switch interface language to Chinese');
   assert.equal(await page.locator('#languageToggle').getAttribute('aria-label'), 'Switch interface language to Chinese', 'top-right language guidance should follow the interface language');
-  const englishHeadings = { overview: 'Welcome back', vocabulary: 'My vocabulary', listening: 'Listening', downloads: 'Offline content', studio: 'Audio and HTML PPT', ai: 'Unified AI configuration and scoring prompts', settings: 'Settings' };
+  const englishHeadings = { overview: 'Welcome back', vocabulary: 'My vocabulary', listening: 'Listening', studio: 'Audio and HTML PPT', ai: 'Unified AI configuration and scoring prompts', settings: 'Settings' };
   for (const [view, heading] of Object.entries(englishHeadings)) {
     await page.evaluate((next) => window.navigate(next), view);
     await page.waitForFunction(({ id, text }) => document.querySelector(`#view-${id} .page-heading h1, #view-${id} .welcome-card h1`)?.textContent.includes(text), { id: view, text: heading });
   }
-  const englishChromeSelectors = ['#goalMessage', '#streakStatus', '#learningInsight', '#vocabularySummary', '#cleanupBannerTitle', '#cleanupBannerMeta', '#detailBookStatus', '#detailMediaMeta', '#storageUsed', '#storageBreakdown', '#offlineVocabularySummary', '#accountAction', '#storageSummary', '#promptTabs'];
+  const englishChromeSelectors = ['#goalMessage', '#streakStatus', '#learningInsight', '#vocabularySummary', '#cleanupBannerTitle', '#cleanupBannerMeta', '#detailBookStatus', '#detailMediaMeta', '#accountAction', '#promptTabs'];
   for (const selector of englishChromeSelectors) {
     const value = await page.locator(selector).textContent();
     assert.equal(/[\u3400-\u9fff]/.test(value), false, `${selector} should translate dynamic interface text to English`);
@@ -151,7 +151,12 @@ async function main() {
   await page.locator('.chapter').nth(1).click();
   assert.ok((await page.locator('.lyrics-empty').textContent()).includes('尚未同步'), 'chapter without transcript should show an honest empty state');
 
-  const views = ['overview', 'vocabulary', 'listening', 'downloads', 'studio', 'ai', 'settings'];
+  assert.equal(await page.locator('#view-downloads').count(), 0, 'offline content view should be removed');
+  assert.equal(await page.locator('[data-view-link="downloads"]').count(), 0, 'offline content navigation should be removed');
+  await page.evaluate(() => window.navigate('downloads'));
+  assert.ok(await page.locator('#view-overview').evaluate((node) => node.classList.contains('active')), 'legacy offline route should fall back to overview');
+
+  const views = ['overview', 'vocabulary', 'listening', 'studio', 'ai', 'settings'];
   for (const view of views) {
     await page.evaluate((next) => window.navigate(next), view);
     assert.ok(await page.locator(`#view-${view}`).evaluate((node) => node.classList.contains('active')), `${view} must be navigable`);
@@ -274,7 +279,7 @@ async function main() {
 
   assert.deepEqual(errors, [], `browser console errors: ${errors.join(' | ')}`);
   await browser.close(); browser = null;
-  console.log('ui-smoke: 8 views, responsive layouts, YouTube, self-hosted auth/sync, AI status and PWA offline reload passed');
+  console.log('ui-smoke: 7 views, responsive layouts, YouTube, self-hosted auth/sync, AI status and PWA offline reload passed');
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.kill('SIGTERM'); });

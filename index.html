@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=23"></script>
-    <link rel="stylesheet" href="./styles.css?v=23" />
+    <script src="./boot.js?v=29"></script>
+    <link rel="stylesheet" href="./styles.css?v=29" />
   </head>
   <body>
     <div class="app-shell">
@@ -24,7 +24,6 @@
           <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
           <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em id="navVocabularyCount">5</em></button>
           <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
-          <button class="nav-item" data-view-link="downloads"><span>⇩</span><b data-i18n="navDownloads">离线内容</b><em>4</em></button>
           <button class="nav-item" data-view-link="studio"><span>✦</span><b data-i18n="navStudio">内容工作台</b></button>
           <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
         </nav>
@@ -249,7 +248,7 @@
                 <div id="listeningPlaylistList"></div>
                 <div class="queue-heading"><div><strong>音频队列</strong><small id="listeningQueueSummary">正在读取课程…</small></div><span id="listeningEditHint">选择一条播放</span></div>
                 <div class="listening-queue" id="listeningQueue"></div>
-                <div class="playlist-summary"><span>真实课程</span><strong id="listeningQueueCount">0 / 0</strong><div><i id="listeningQueueProgress" style="width:0"></i></div><button data-view-link="downloads">管理离线数据 →</button></div>
+                <div class="playlist-summary"><span>真实课程</span><strong id="listeningQueueCount">0 / 0</strong><div><i id="listeningQueueProgress" style="width:0"></i></div></div>
               </aside>
 
               <article class="audio-player card">
@@ -269,26 +268,6 @@
                 <div class="listening-lines" id="listeningLines"><div class="lyrics-empty"><span>CC</span><strong>正在读取对应字幕</strong><small>选择音频后会显示该视频已同步的真实字幕。</small></div></div>
                 <div class="timeline-adjust"><div><span>歌词整体偏移</span><strong id="timelineOffset">-0.2s</strong></div><input type="range" id="timelineRange" min="-20" max="20" value="-2" /><button class="text-btn" id="restoreTimeline">恢复默认</button></div>
               </article>
-            </div>
-          </section>
-
-          <!-- Downloads -->
-          <section class="view" id="view-downloads" data-title-zh="离线内容" data-title-en="Offline content">
-            <div class="page-heading"><div><span class="eyebrow">OFFLINE LIBRARY</span><h1>离线内容</h1><p>统一管理视频、音频、字幕和词汇包。</p></div><div class="button-row"><button class="secondary-btn" id="downloadSettings">下载设置</button><button class="primary-btn" id="demoDownload">＋ 缓存新内容</button></div></div>
-
-            <article class="rights-notice card"><span>版权</span><p><strong>YouTube 视频仅使用官方嵌入播放器</strong><small>视频版权归原作者及发布者所有。应用只缓存获得授权的媒体、用户自有音频和学习数据，不绕过平台限制下载或重新分发受保护内容。</small></p><a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube 条款 ↗</a></article>
-
-            <article class="storage-card card"><div class="storage-copy"><span class="metric-icon violet">⇩</span><div><span class="eyebrow">DEVICE STORAGE</span><h3 id="storageUsed">正在读取…</h3><p id="storageBreakdown">浏览器缓存、学习记录与本地录音</p></div></div><div class="storage-bar"><i class="s-video" id="storageUsageBar" style="width:0"></i></div><div class="storage-free"><strong id="storageAvailable">—</strong><small>浏览器可用配额</small></div></article>
-
-            <div class="downloads-toolbar"><div class="segmented"><button class="active">全部 5</button><button>应用数据 2</button><button>学习资料 1</button><button>在线来源 2</button></div><div class="search-box small"><span>⌕</span><input placeholder="搜索离线内容" /></div></div>
-
-            <div class="download-list card" id="downloadList">
-              <div class="download-header"><span><input type="checkbox" id="selectAllDownloads" /> 内容</span><span>类型与质量</span><span>占用空间</span><span>状态</span><span>操作</span></div>
-              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-purple">▶</span><div><strong>Mall Vocabulary In English</strong><small>YouTube · VFe7Ap1kfk0 · 官方嵌入播放</small></div></div><span>在线来源</span><span>流式播放</span><span class="status progress">↗ 官方播放</span><div><button class="icon-btn local-play" data-view-link="practice">▶</button><button class="icon-btn download-more">⋮</button></div></article>
-              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-teal">85</span><div><strong>英语口语播放列表课程目录</strong><small id="offlinePlaylistSummary">PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ · 正在读取主题数</small></div></div><span>应用数据</span><span>&lt; 1 MB</span><span class="status success">✓ 可离线查看</span><div><button class="icon-btn redownload">↻</button><button class="icon-btn download-more">⋮</button></div></article>
-              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-blue">Aa</span><div><strong>Mall Vocabulary 词汇包</strong><small id="offlineVocabularySummary">5 个词 · 关联主题 VFe7Ap1kfk0</small></div></div><span>学习资料</span><span>&lt; 1 MB</span><span class="status success">✓ 已保存</span><div><button class="icon-btn redownload">↻</button><button class="icon-btn download-more">⋮</button></div></article>
-              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-orange">♪</span><div><strong>YouTube 课程音频队列</strong><small id="offlineListeningSummary">正在读取真实课程主题</small></div></div><span>在线来源</span><span>流式播放</span><span class="status progress">↗ 官方播放</span><div><button class="icon-btn" data-view-link="listening">▶</button><button class="icon-btn download-more">⋮</button></div></article>
-              <article class="download-row"><div class="download-name"><input type="checkbox" /><span class="download-thumb cover-teal">PWA</span><div><strong>应用外壳与界面资源</strong><small>页面、样式、脚本、图标与结构化课程数据</small></div></div><span>应用数据</span><span id="shellCacheSize">浏览器管理</span><span class="status success">✓ 离线回退</span><div><button class="icon-btn redownload">↻</button><button class="icon-btn download-more">⋮</button></div></article>
             </div>
           </section>
 
@@ -328,7 +307,7 @@
 
               <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>英语学习辅助语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
 
-              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small id="micDeviceSummary">尚未检测设备</small></div><span class="status warning" id="micPermissionStatus">待检测</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习、学习目标和下载完成</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">⇩</span><div><strong>离线存储</strong><small id="storageSummary">正在读取浏览器存储…</small></div><span class="status warning" id="storagePermissionStatus">检测中</span><button class="secondary-btn compact" data-view-link="downloads">管理</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>仅在连接真实评分服务后上传</small></div><span class="status warning">待配置</span><button class="secondary-btn compact" data-view-link="ai">配置</button></div></article>
+              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small id="micDeviceSummary">尚未检测设备</small></div><span class="status warning" id="micPermissionStatus">待检测</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习与学习目标提醒</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>仅在连接真实评分服务后上传</small></div><span class="status warning">待配置</span><button class="secondary-btn compact" data-view-link="ai">配置</button></div></article>
             </div>
           </section>
         </div>
@@ -353,9 +332,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=23"></script>
-    <script src="./i18n.js?v=23"></script>
-    <script src="./backend.js?v=23"></script>
-    <script src="./app.js?v=23"></script>
+    <script src="./runtime-config.js?v=29"></script>
+    <script src="./i18n.js?v=29"></script>
+    <script src="./backend.js?v=29"></script>
+    <script src="./app.js?v=29"></script>
   </body>
 </html>

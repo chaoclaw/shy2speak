@@ -370,12 +370,12 @@ function renderAnalyticsOverview() {
 
 const copy = {
   zh: {
-    navOverview: '学习概览', navPractice: '视频学习', navVocabulary: '生词本', navListening: '磨耳朵', navDownloads: '离线内容', navStudio: '内容工作台', navAI: 'AI 服务', navSettings: '设置',
-    overview: '学习概览', practice: '视频学习', vocabulary: '生词本', listening: '磨耳朵', downloads: '离线内容', studio: '内容工作台', ai: 'AI 服务', settings: '个人设置',
+    navOverview: '学习概览', navPractice: '视频学习', navVocabulary: '生词本', navListening: '磨耳朵', navStudio: '内容工作台', navAI: 'AI 服务', navSettings: '设置',
+    overview: '学习概览', practice: '视频学习', vocabulary: '生词本', listening: '磨耳朵', studio: '内容工作台', ai: 'AI 服务', settings: '个人设置',
   },
   en: {
-    navOverview: 'Overview', navPractice: 'Video practice', navVocabulary: 'Vocabulary', navListening: 'Listening', navDownloads: 'Offline', navStudio: 'Content studio', navAI: 'AI services', navSettings: 'Settings',
-    overview: 'Learning overview', practice: 'Video practice', vocabulary: 'Vocabulary', listening: 'Immersive listening', downloads: 'Offline content', studio: 'Content studio', ai: 'AI services', settings: 'Settings',
+    navOverview: 'Overview', navPractice: 'Video practice', navVocabulary: 'Vocabulary', navListening: 'Listening', navStudio: 'Content studio', navAI: 'AI services', navSettings: 'Settings',
+    overview: 'Learning overview', practice: 'Video practice', vocabulary: 'Vocabulary', listening: 'Immersive listening', studio: 'Content studio', ai: 'AI services', settings: 'Settings',
   },
 };
 
@@ -651,7 +651,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=23', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=29', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -900,7 +900,7 @@ function setupCatalogControls() {
 }
 
 const viewTitles = {
-  overview: ['学习概览', 'Learning overview'], practice: ['视频学习', 'Video practice'], vocabulary: ['生词本', 'Vocabulary'], listening: ['磨耳朵', 'Immersive listening'], downloads: ['离线内容', 'Offline content'], studio: ['内容工作台', 'Content studio'], ai: ['AI 服务', 'AI services'], settings: ['个人设置', 'Settings'],
+  overview: ['学习概览', 'Learning overview'], practice: ['视频学习', 'Video practice'], vocabulary: ['生词本', 'Vocabulary'], listening: ['磨耳朵', 'Immersive listening'], studio: ['内容工作台', 'Content studio'], ai: ['AI 服务', 'AI services'], settings: ['个人设置', 'Settings'],
 };
 
 function applyAppearance() {
@@ -1400,7 +1400,6 @@ function renderVocabulary() {
   $('#vocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · ${state.vocabularyData.source?.title || 'Mall Vocabulary In English'}`;
   $('#navVocabularyCount').textContent = state.vocabularyData.items.length;
   $('#reviewCount').textContent = state.vocabularyData.items.length;
-  if ($('#offlineVocabularySummary')) $('#offlineVocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · 关联主题 ${state.vocabularyData.source?.videoId || 'VFe7Ap1kfk0'}`;
 }
 
 async function loadVocabulary() {
@@ -1411,7 +1410,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=23', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=29', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1874,34 +1873,6 @@ function setupListening() {
   });
   renderListeningPlaylist();
   hydrateListeningTopic(currentListeningTopic()).catch(() => {});
-}
-
-function setupDownloads() {
-  const recordings = (analytics.data.events || []).filter((event) => event.type === 'recording');
-  const recordingBytes = recordings.reduce((sum, event) => sum + Number(event.bytes || 0), 0);
-  if ($('#recordingSummary')) $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
-  if ($('#recordingSize')) $('#recordingSize').textContent = formatBytes(recordingBytes);
-  $('#offlinePlaylistSummary').textContent = `PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ · ${state.catalog?.topics?.length || 0} 个主题`;
-  $('#offlineListeningSummary').textContent = state.language === 'en'
-    ? `${courseListeningTopics().length} real videos · official YouTube embeds`
-    : `${courseListeningTopics().length} 个真实视频 · YouTube 官方嵌入播放`;
-  if (state.vocabularyData) $('#offlineVocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · 关联主题 ${state.vocabularyData.source?.videoId || 'VFe7Ap1kfk0'}`;
-  if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
-    $('#storageUsed').textContent = `已使用 ${formatBytes(usage)}`;
-    $('#storageAvailable').textContent = formatBytes(Math.max(0, quota - usage));
-    $('#storageBreakdown').textContent = `浏览器总配额 ${formatBytes(quota)} · 数据来自 Storage API`;
-    $('#storageUsageBar').style.width = `${quota ? Math.min(100, (usage / quota) * 100) : 0}%`;
-  }).catch(() => { $('#storageUsed').textContent = '存储用量不可用'; });
-  $('#demoDownload').addEventListener('click', () => showModal({
-    eyebrow: 'CELLULAR DATA', title: '将使用较多移动数据',
-    body: `<div class="warning-box"><span>⚠</span><p><strong>授权媒体示例预计使用约 286 MB 移动数据</strong><br><small>超过 50 MB，建议连接 Wi-Fi 后继续。YouTube 内容不会由本应用直接下载。</small></p></div><p>只有在你手动确认后，获得授权的媒体下载才会开始。</p>`,
-    actions: [{ label: '取消下载' }, { label: '等待 Wi-Fi', onClick: () => toast('任务已加入队列，将在连接 Wi-Fi 后自动开始。') }, { label: '仍然下载', style: 'primary', onClick: () => toast('已确认使用移动数据，下载任务开始。') }],
-  }));
-  $('#downloadSettings').addEventListener('click', () => showModal({ eyebrow: 'DOWNLOAD SETTINGS', title: '下载设置', body: `<div class="modal-field"><label>网络策略</label><select><option>移动数据超过 50 MB 时询问</option><option>仅 Wi-Fi 下载</option><option>禁止移动数据下载</option></select></div><div class="modal-field"><label>默认视频质量</label><select><option>720p（推荐）</option><option>360p</option><option>1080p</option></select></div><div class="modal-field"><label>最大缓存空间</label><select><option>10 GB</option><option>5 GB</option><option>无限制</option></select></div>`, actions: [{ label: '取消' }, { label: '保存设置', style: 'primary', onClick: () => toast('下载设置已保存。') }] }));
-  $$('.redownload').forEach((button) => button.addEventListener('click', () => toast('正在重新下载最新媒体版本，个人设置将保留。')));
-  $$('.pause-download').forEach((button) => button.addEventListener('click', () => { button.textContent = button.textContent === 'Ⅱ' ? '▶' : 'Ⅱ'; toast(button.textContent === '▶' ? '下载已暂停。' : '下载已继续。'); }));
-  $$('.download-more').forEach((button) => button.addEventListener('click', () => showModal({ eyebrow: 'OFFLINE ITEM', title: '管理离线内容', body: `<p>删除媒体不会删除学习进度、生词、历史成绩或个人歌词时间轴。</p>`, actions: [{ label: '重新下载', onClick: () => toast('重新下载任务已创建。') }, { label: '删除本地文件', style: 'primary', onClick: () => toast('本地媒体已删除，可随时重新下载。') }] })));
-  $('#selectAllDownloads').addEventListener('change', (event) => $$('.download-row input[type="checkbox"]').forEach((checkbox) => checkbox.checked = event.target.checked));
 }
 
 function providerEndpoint(baseUrl, path) {
@@ -2381,10 +2352,6 @@ function setupSettings() {
       toast(error.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在浏览器站点设置中开启。' : `麦克风检测失败：${error.message}`);
     } finally { button.disabled = false; button.textContent = '测试'; }
   });
-  if (navigator.storage?.estimate) navigator.storage.estimate().then(({ usage = 0, quota = 0 }) => {
-    $('#storageSummary').textContent = `已用 ${formatBytes(usage)} · 配额 ${formatBytes(quota)}`;
-    $('#storagePermissionStatus').textContent = '可用'; $('#storagePermissionStatus').className = 'status success';
-  }).catch(() => { $('#storageSummary').textContent = '浏览器未提供存储用量'; $('#storagePermissionStatus').textContent = '受限'; });
   $('#configureBackend').addEventListener('click', openBackendConfig);
   $('#authPreview').addEventListener('click', () => state.authSession ? navigate('settings') : openAuthModal());
   $('#accountAction').addEventListener('click', () => state.authSession ? syncCloudState(true).catch((error) => toast(friendlyAccountError(error))) : openAuthModal());
@@ -2408,7 +2375,7 @@ async function init() {
   state.authSession = account.session || null;
   setupNavigation(); setupGlobalControls(); setupHoverToasts(); setupNotifications();
   await loadCatalog();
-  setupCatalogControls(); setupPractice(); await setupVocabulary(); setupListening(); setupDownloads(); setupStudio(); setupAI(); setupSettings(); setupPWA();
+  setupCatalogControls(); setupPractice(); await setupVocabulary(); setupListening(); setupStudio(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();
   shyBackend.onAuthChange((session) => { state.authSession = session; updateAccountUI(); });
   if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('NAS 同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));

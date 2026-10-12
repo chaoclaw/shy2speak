@@ -14,7 +14,6 @@
   "shortcuts": [
     { "name": "继续学习", "url": "./#/practice" },
     { "name": "今日复习", "url": "./#/vocabulary" },
-    { "name": "磨耳朵", "url": "./#/listening" },
-    { "name": "离线内容", "url": "./#/downloads" }
+    { "name": "磨耳朵", "url": "./#/listening" }
   ]
 }
