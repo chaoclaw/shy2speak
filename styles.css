@@ -316,6 +316,10 @@ mark { background:var(--amber-soft); color:inherit; padding:1px 3px; border-radi
 
 /* Keep long transcripts inside the listening workspace instead of stretching the player off-screen. */
 .listening-lines { position:relative; min-height:0; scroll-behavior:smooth; }
+.audio-cover.has-player > img { display:block; z-index:1; }
+.audio-cover.has-player > .cover-orbit { display:grid; z-index:2; }
+.listening-audio-engine { display:none; }
+.listening-youtube-frame { position:absolute; inset:0; z-index:0; width:100%; height:100%; min-height:0; opacity:0; pointer-events:none; }
 @media (min-width:721px) {
   .listening-layout { align-items:start; }
   .playlist-panel,.audio-player,.listening-lyrics { height:clamp(620px,calc(100vh - 150px),760px); min-height:620px; }

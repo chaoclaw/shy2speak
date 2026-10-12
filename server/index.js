@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import express from 'express';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
+import { Innertube } from 'youtubei.js';
 import { fetchYouTubeTopic } from './youtube-catalog.js';
 import { fetchYouTubePlaylist, preparePlaylistTopics } from './youtube-playlist.js';
 
@@ -277,6 +280,26 @@ const captionSyncPromises = new Map();
 const captionFailureCooldowns = new Map();
 const playlistSyncPromises = new Map();
 const playlistFailureCooldowns = new Map();
+const youtubeAudioFormatCache = new Map();
+let youtubeAudioClientPromise;
+
+async function youtubeAudioClient() {
+  if (!youtubeAudioClientPromise) {
+    youtubeAudioClientPromise = Innertube.create({ retrieve_player: true, generate_session_locally: true })
+      .catch((error) => { youtubeAudioClientPromise = null; throw error; });
+  }
+  return youtubeAudioClientPromise;
+}
+
+async function youtubeAudioFormat(videoId) {
+  const cached = youtubeAudioFormatCache.get(videoId);
+  if (cached?.expiresAt > Date.now()) return cached.format;
+  const client = await youtubeAudioClient();
+  const format = await client.getStreamingData(videoId, { type: 'audio', quality: 'bestefficiency', format: 'any', language: 'original' });
+  if (!format?.url || !/^https?:/.test(format.url) || format.has_video) throw new Error('Audio-only stream is unavailable');
+  youtubeAudioFormatCache.set(videoId, { format, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return format;
+}
 
 async function baseCatalog() {
   const contents = await fs.readFile(catalogPath, 'utf8');
@@ -504,7 +527,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v31',
+    release: 'v32',
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
@@ -523,6 +546,33 @@ app.get('/api/catalog/topics/:videoId', rateLimit(60 * 1000, 30), asyncRoute(asy
   if (!topic) throw new HttpError(404, '该视频不在已配置的播放列表中。', 'topic_not_found');
   response.set('Cache-Control', 'private, max-age=300');
   response.json(await hydratedYouTubeTopic(topic));
+}));
+
+app.get('/api/youtube/audio/:videoId', rateLimit(60 * 1000, 300), asyncRoute(async (request, response) => {
+  const videoId = String(request.params.videoId || '');
+  if (!/^[\w-]{11}$/.test(videoId)) throw new HttpError(400, '无效的 YouTube 视频 ID。', 'invalid_video_id');
+  const catalog = await playlistCatalog();
+  if (!catalog.topics.some((topic) => topic.videoId === videoId && topic.serverManaged)) {
+    throw new HttpError(404, '该音频不在已配置的课程列表中。', 'audio_not_found');
+  }
+  const format = await youtubeAudioFormat(videoId);
+  const controller = new AbortController();
+  request.once('aborted', () => controller.abort());
+  const upstream = await fetch(format.url, {
+    headers: { ...(request.get('range') ? { Range: request.get('range') } : {}), 'User-Agent': request.get('user-agent') || 'Shy2Speak/1.0' },
+    signal: controller.signal,
+  });
+  if (!upstream.ok || !upstream.body) throw new HttpError(502, '课程音频暂时不可用。', 'audio_upstream_unavailable');
+  response.status(upstream.status);
+  for (const header of ['content-length', 'content-range', 'accept-ranges', 'last-modified']) {
+    const value = upstream.headers.get(header); if (value) response.set(header, value);
+  }
+  response.set({
+    'Content-Type': upstream.headers.get('content-type') || format.mime_type || 'audio/webm',
+    'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
+    'Cache-Control': 'private, max-age=300',
+  });
+  await pipeline(Readable.fromWeb(upstream.body), response);
 }));
 
 const authLimiter = rateLimit(15 * 60 * 1000, 30);
@@ -777,7 +827,8 @@ for (const file of ['boot.js', 'i18n.js', 'app.js', 'backend.js', 'styles.css', 
 }
 app.get(['/', '/index.html'], (_request, response) => response.sendFile(path.join(publicDirectory, 'index.html')));
 app.use('/api', (_request, _response, next) => next(new HttpError(404, '接口不存在。', 'not_found')));
-app.use((error, _request, response, _next) => {
+app.use((error, _request, response, next) => {
+  if (response.headersSent) return next(error);
   const status = Number(error.status || 500);
   if (status >= 500) console.error(error);
   response.status(status).json({ error: error.code || 'internal_error', message: status >= 500 ? '服务器暂时不可用，请稍后重试。' : error.message });

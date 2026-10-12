@@ -31,6 +31,8 @@ assert.match(server, /\/api\/catalog/, 'NAS API must expose its hydrated caption
 assert.match(server, /fetchYouTubeTopic/, 'NAS API must sync public YouTube captions server-side');
 assert.match(server, /fetchYouTubePlaylist/, 'NAS API must discover all public playlist topics server-side');
 assert.match(server, /\/api\/catalog\/topics\/:videoId/, 'NAS API must hydrate one topic on demand');
+assert.match(server, /\/api\/youtube\/audio\/:videoId/, 'NAS API must expose low-data course audio streaming');
+assert.match(server, /type: 'audio', quality: 'bestefficiency'/, 'course audio must select an audio-only bandwidth-efficient format');
 assert.match(server, /\/api\/vocabulary/, 'NAS API must expose account vocabulary');
 assert.match(server, /\/api\/vocabulary\/delete-everywhere/, 'NAS API must persist cleanup across every wordbook');
 assert.match(server, /validateAvatar/, 'profile API must validate uploaded avatars');

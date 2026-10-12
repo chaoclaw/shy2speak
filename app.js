@@ -651,7 +651,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=31', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=32', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1410,7 +1410,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=31', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=32', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1617,7 +1617,7 @@ function renderListeningLyrics(topic) {
   const sentences = topicListeningSentences(topic);
   if (!sentences.length) {
     const empty = document.createElement('div'); empty.className = 'lyrics-empty';
-    empty.innerHTML = `<span>CC</span><strong>${state.language === 'en' ? 'Captions are not available yet' : '字幕尚未同步'}</strong><small>${state.language === 'en' ? 'The official YouTube player can still play this item. Captions appear after the NAS sync succeeds.' : '仍可通过 YouTube 官方播放器播放；NAS 字幕同步成功后会在这里显示歌词。'}</small>`;
+    empty.innerHTML = `<span>CC</span><strong>${state.language === 'en' ? 'Captions are not available yet' : '字幕尚未同步'}</strong><small>${state.language === 'en' ? 'The course audio can still play. Lyrics appear after the NAS caption sync succeeds.' : '课程音轨仍可播放；NAS 字幕同步成功后会在这里显示歌词。'}</small>`;
     lines.append(empty);
     return;
   }
@@ -1653,12 +1653,22 @@ function renderListeningPlaylist({ resetTime = true } = {}) {
 }
 
 function sendListeningPlayerCommand(func, args = []) {
+  const audio = $('.listening-audio-engine');
+  if (audio) {
+    if (func === 'playVideo') audio.play().catch(() => {});
+    if (func === 'pauseVideo') audio.pause();
+    if (func === 'seekTo') audio.currentTime = Math.max(0, Number(args[0] || 0));
+    if (func === 'setPlaybackRate') audio.playbackRate = Number(args[0] || 1);
+    return;
+  }
   $('.listening-youtube-frame')?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
 }
 
 function resetListeningPlayer(updateUi = true) {
   state.listeningPlaybackToken += 1;
   state.audioPlaying = false;
+  const audio = $('.listening-audio-engine');
+  if (audio) { audio.pause(); audio.remove(); }
   $('.listening-youtube-frame')?.remove();
   $('#listeningVideoStage')?.classList.remove('has-player');
   if (updateUi) {
@@ -1672,15 +1682,13 @@ function stopListeningSpeech(updateUi = true) {
   resetListeningPlayer(updateUi);
 }
 
-function playListeningTrack() {
-  const topic = currentListeningTopic();
-  if (!topic?.videoId) { toast('该列表暂无可播放内容。'); return; }
-  resetYouTubePlayer();
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+function mountListeningYouTubeEngine(topic) {
+  $('#listeningSourceTitle').textContent = state.language === 'en' ? 'Compatible audio engine' : '兼容音频引擎';
+  $('#listeningSourceMeta').textContent = state.language === 'en' ? 'Course audio · synchronized lyrics' : '课程音轨 · 歌词时间轴同步';
   let frame = $('.listening-youtube-frame');
   if (!frame) {
     frame = document.createElement('iframe');
-    frame.className = 'listening-youtube-frame'; frame.title = topic.title;
+    frame.className = 'listening-youtube-frame'; frame.title = topic.title; frame.tabIndex = -1; frame.setAttribute('aria-hidden', 'true');
     frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'; frame.allowFullscreen = true;
     const params = new URLSearchParams({ autoplay: '1', playsinline: '1', enablejsapi: '1', rel: '0', origin: location.origin, start: String(Math.max(0, Math.floor(state.audioTime))) });
     frame.src = `https://www.youtube-nocookie.com/embed/${topic.videoId}?${params}`;
@@ -1690,6 +1698,42 @@ function playListeningTrack() {
       sendListeningPlayerCommand('addEventListener', ['onStateChange']);
     });
     $('#listeningVideoStage').append(frame); $('#listeningVideoStage').classList.add('has-player');
+  } else sendListeningPlayerCommand('playVideo');
+}
+
+function mountListeningAudioEngine(topic) {
+  const apiBase = catalogApiBase();
+  if (!apiBase) return false;
+  $('#listeningSourceTitle').textContent = state.language === 'en' ? 'Low-data audio stream' : '低流量音频流';
+  $('#listeningSourceMeta').textContent = state.language === 'en' ? 'Audio only · no video data loaded' : '仅加载音频 · 不加载视频画面';
+  const audio = document.createElement('audio');
+  audio.className = 'listening-audio-engine'; audio.preload = 'metadata'; audio.src = `${apiBase}/youtube/audio/${encodeURIComponent(topic.videoId)}`;
+  audio.playbackRate = [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex];
+  const fallback = () => {
+    if (!audio.isConnected || audio.dataset.fallback === 'true') return;
+    audio.dataset.fallback = 'true'; audio.remove(); mountListeningYouTubeEngine(topic);
+    toast(state.language === 'en' ? 'Audio-only stream unavailable; using the compatible playback engine.' : '纯音频流暂时不可用，已切换兼容播放引擎。');
+  };
+  audio.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audio.duration)) state.audioDuration = audio.duration;
+    if (state.audioTime > 0 && state.audioTime < audio.duration) audio.currentTime = state.audioTime;
+    renderAudioTime();
+  });
+  audio.addEventListener('timeupdate', () => { state.audioTime = audio.currentTime; renderAudioTime(); });
+  audio.addEventListener('ended', advanceListeningAfterEnd);
+  audio.addEventListener('error', fallback, { once: true });
+  $('#listeningVideoStage').append(audio); $('#listeningVideoStage').classList.add('has-player');
+  audio.play().catch(fallback);
+  return true;
+}
+
+function playListeningTrack() {
+  const topic = currentListeningTopic();
+  if (!topic?.videoId) { toast('该列表暂无可播放内容。'); return; }
+  resetYouTubePlayer();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (!$('.listening-audio-engine') && !$('.listening-youtube-frame')) {
+    if (!mountListeningAudioEngine(topic)) mountListeningYouTubeEngine(topic);
   } else sendListeningPlayerCommand('playVideo');
   state.audioPlaying = true;
   $('#audioPlay').textContent = 'Ⅱ'; $('.audio-player').classList.add('playing');
@@ -1770,7 +1814,9 @@ function setupListening() {
   addEventListener('message', handleListeningPlayerMessage);
   setInterval(() => {
     if (!state.audioPlaying) return;
-    state.audioTime = state.audioDuration ? Math.min(state.audioDuration, state.audioTime + 0.5 * [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex]) : state.audioTime + 0.5;
+    const audio = $('.listening-audio-engine');
+    if (audio) state.audioTime = audio.currentTime;
+    else state.audioTime = state.audioDuration ? Math.min(state.audioDuration, state.audioTime + 0.5 * [0.5, 0.75, 0.8, 1, 1.25, 1.5, 2][state.speedIndex]) : state.audioTime + 0.5;
     renderAudioTime();
   }, 500);
   $('#listeningPlaylistList').addEventListener('click', (event) => {

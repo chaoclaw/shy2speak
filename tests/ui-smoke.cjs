@@ -8,6 +8,14 @@ const port = 4174;
 const origin = `http://127.0.0.1:${port}`;
 const catalogFixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'catalog.json'), 'utf8'));
 const vocabularyFixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'vocabulary.json'), 'utf8'));
+function silentWav(seconds = 260) {
+  const sampleRate = 8000; const dataSize = sampleRate * seconds; const buffer = Buffer.alloc(44 + dataSize, 128);
+  buffer.write('RIFF', 0); buffer.writeUInt32LE(36 + dataSize, 4); buffer.write('WAVEfmt ', 8); buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22); buffer.writeUInt32LE(sampleRate, 24); buffer.writeUInt32LE(sampleRate, 28);
+  buffer.writeUInt16LE(1, 32); buffer.writeUInt16LE(8, 34); buffer.write('data', 36); buffer.writeUInt32LE(dataSize, 40);
+  return buffer;
+}
+const audioFixture = silentWav();
 catalogFixture.topics[0].transcriptOrigin = 'youtube-public-captions';
 catalogFixture.topics[0].chapters = [
   {
@@ -64,6 +72,7 @@ async function main() {
   await page.route('**/*', async (route) => {
     const url = route.request().url();
     if (url.includes('/data/catalog.json')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(catalogFixture) });
+    if (url.includes('/api/youtube/audio/')) return route.fulfill({ status: 200, headers: { 'Content-Type': 'audio/wav', 'Accept-Ranges': 'bytes' }, body: audioFixture });
     if (url.includes('youtube.com/oembed')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'Live YouTube lesson', author_name: 'Verified channel', thumbnail_url: `${origin}/icons/icon.svg` }) });
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
@@ -212,7 +221,7 @@ async function main() {
   assert.equal(vocabularyDeleteCalls, 1, 'cleanup must call the authenticated delete-everywhere API');
   assert.equal(await page.locator('.word-list-item').count(), 2, 'deleted words should leave every visible wordbook immediately');
 
-  await page.evaluate(() => window.navigate('listening'));
+  await page.evaluate(() => { Object.defineProperty(window, '__SHY2SPEAK_CONFIG__', { configurable: true, value: { apiBase: '/api' } }); window.navigate('listening'); });
   assert.equal(await page.locator('#listeningQueue .queue-track').count(), 85, 'all real course videos should populate the listening audio queue');
   assert.equal(await page.locator('#listeningPlaylistList .playlist-item').count(), 1, 'legacy listening test playlists must be removed');
   assert.equal((await page.locator('#view-listening').textContent()).includes('测试集'), false, 'listening UI must not expose legacy test data');
@@ -235,29 +244,27 @@ async function main() {
   assert.ok(playlistSelectLayout.arrowPosition.includes('12px'), 'select arrow should have comfortable right-edge spacing');
   await page.locator('#appModal').evaluate((dialog) => dialog.close());
   await page.locator('#listeningQueue .queue-track').nth(1).click();
-  await page.waitForSelector('.listening-youtube-frame');
+  await page.waitForSelector('.listening-audio-engine', { state: 'attached' });
   assert.equal(await page.locator('#audioPlay').textContent(), 'Ⅱ', 'clicking a listening queue item should start playback');
+  assert.equal(await page.locator('.listening-youtube-frame').count(), 0, 'self-hosted listening should prefer an audio-only stream');
   assert.equal(await page.locator('.youtube-frame').count(), 0, 'listening playback must not leave the practice player running');
   assert.equal(await page.locator('#listeningLines .listen-line').count(), 82, 'long listening transcripts should render inside the lyrics card');
   const listeningLayout = await page.evaluate(() => {
     const playerCard = document.querySelector('.audio-player').getBoundingClientRect();
-    const stage = document.querySelector('#listeningVideoStage').getBoundingClientRect();
-    const frame = document.querySelector('.listening-youtube-frame').getBoundingClientRect();
+    const audio = document.querySelector('.listening-audio-engine');
+    const cover = document.querySelector('.cover-orbit');
     const lyrics = document.querySelector('#listeningLines');
-    return { playerHeight: playerCard.height, frameVisible: frame.top >= stage.top && frame.bottom <= stage.bottom, lyricsScrollable: lyrics.scrollHeight > lyrics.clientHeight };
+    return { playerHeight: playerCard.height, audioOnly: getComputedStyle(audio).display === 'none', coverVisible: getComputedStyle(cover).display !== 'none' && cover.getBoundingClientRect().height > 0, lyricsScrollable: lyrics.scrollHeight > lyrics.clientHeight };
   });
-  assert.ok(listeningLayout.playerHeight <= 760 && listeningLayout.frameVisible, `listening player must remain visible with a long transcript: ${JSON.stringify(listeningLayout)}`);
+  assert.ok(listeningLayout.playerHeight <= 760 && listeningLayout.audioOnly && listeningLayout.coverVisible, `listening must use an audio-only music-player presentation: ${JSON.stringify(listeningLayout)}`);
   assert.equal(listeningLayout.lyricsScrollable, true, 'long lyrics should scroll inside their card');
-  await page.evaluate(() => {
-    const frame = document.querySelector('.listening-youtube-frame');
-    dispatchEvent(new MessageEvent('message', { source: frame.contentWindow, origin: 'https://www.youtube-nocookie.com', data: JSON.stringify({ event: 'infoDelivery', info: { currentTime: 120, duration: 260 } }) }));
-  });
+  await page.locator('#listeningLines .listen-line').filter({ hasText: 'Long listening sentence 35.' }).click();
   await page.waitForFunction(() => Number(document.querySelector('#listeningLines .listen-line.active')?.dataset.start || 0) >= 119);
   await page.waitForFunction(() => document.querySelector('#listeningLines').scrollTop > 0);
   await page.click('#nextAudio');
   assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('/ 85'), 'listening next-track control should move through the 85-video queue');
   await page.evaluate(() => window.navigate('practice'));
-  assert.equal(await page.locator('.listening-youtube-frame').count(), 0, 'opening video practice must stop listening playback');
+  assert.equal(await page.locator('.listening-audio-engine').count(), 0, 'opening video practice must stop listening playback');
 
   await page.click('#notificationButton');
   assert.ok((await page.locator('#modalTitle').textContent()).includes('通知'), 'notification button should open the notification center');
