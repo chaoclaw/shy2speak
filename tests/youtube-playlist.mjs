@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { fetchYouTubePlaylist, normalizePlaylistResult } from '../server/youtube-playlist.js';
+import { extractYouTubeInitialData, fetchYouTubePlaylist, normalizePlaylistResult, playlistResultFromInitialData } from '../server/youtube-playlist.js';
 
 const playlistId = 'PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ';
 const result = {
@@ -55,9 +55,29 @@ await assert.rejects(
     minimumVideoCount: 85,
     getInnertubeData: async () => result,
     getPlaylistData: async () => result,
+    getPageData: async () => result,
   }),
   /only 2 of 85 expected videos/,
   'an incomplete playlist must not replace a known complete catalog',
 );
+
+const pageFixture = `<html><script>var ytInitialData = ${JSON.stringify({
+  metadata: { playlistMetadataRenderer: { title: 'Changed layout playlist' } },
+  contents: { futureYouTubeLayout: { arbitraryNesting: [
+    { playlistVideoRenderer: { ...result.items[0], videoId: result.items[0].id } },
+    { anotherWrapper: { playlistVideoRenderer: { ...result.items[1], videoId: result.items[1].id } } },
+  ] } },
+})};</script></html>`;
+const pageResult = playlistResultFromInitialData(extractYouTubeInitialData(pageFixture));
+assert.equal(pageResult.metadata.title, 'Changed layout playlist');
+assert.deepEqual(pageResult.items.map((item) => item.id), ['VFe7Ap1kfk0', 'abcdefghijk'], 'page parsing must not rely on YouTube’s fixed contents path');
+
+const pageRecovered = await fetchYouTubePlaylist(playlistId, seed, {
+  minimumVideoCount: 2,
+  getInnertubeData: async () => { throw new Error('empty Innertube'); },
+  getPlaylistData: async () => { throw new Error('outdated library parser'); },
+  getPageData: async () => pageResult,
+});
+assert.equal(pageRecovered.discoveredVideoCount, 2, 'the resilient page parser must be a working final fallback');
 
 console.log('youtube-playlist: ordered playlist discovery and topic normalization valid');

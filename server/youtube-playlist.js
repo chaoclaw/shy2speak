@@ -15,6 +15,101 @@ function timedFetch(timeoutMs) {
   };
 }
 
+function balancedJsonObject(source, start) {
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === '{') depth += 1;
+    else if (character === '}' && --depth === 0) return source.slice(start, index + 1);
+  }
+  return '';
+}
+
+export function extractYouTubeInitialData(html) {
+  const source = String(html || '');
+  const markers = ['var ytInitialData =', 'window["ytInitialData"] =', 'ytInitialData =', '"ytInitialData":'];
+  for (const marker of markers) {
+    let markerIndex = source.indexOf(marker);
+    while (markerIndex >= 0) {
+      const start = source.indexOf('{', markerIndex + marker.length);
+      if (start < 0) break;
+      const candidate = balancedJsonObject(source, start);
+      if (candidate) {
+        try { return JSON.parse(candidate); } catch { /* Try the next matching assignment. */ }
+      }
+      markerIndex = source.indexOf(marker, markerIndex + marker.length);
+    }
+  }
+  throw new Error('YouTube page did not contain readable ytInitialData');
+}
+
+function visitObject(value, visitor) {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) { value.forEach((item) => visitObject(item, visitor)); return; }
+  visitor(value);
+  Object.values(value).forEach((item) => visitObject(item, visitor));
+}
+
+function lockupPlaylistItem(lockup) {
+  if (lockup?.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO' || !/^[\w-]{11}$/.test(lockup.contentId || '')) return null;
+  const metadata = lockup.metadata?.lockupMetadataViewModel || {};
+  const rows = metadata.metadata?.contentMetadataViewModel?.metadataRows || [];
+  const metadataParts = rows.flatMap((row) => row.metadataParts || []);
+  const sources = lockup.contentImage?.thumbnailViewModel?.image?.sources
+    || lockup.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources
+    || [];
+  return {
+    id: lockup.contentId,
+    title: String(metadata.title?.content || '').trim(),
+    channelTitle: String(metadataParts[0]?.text?.content || '').trim(),
+    thumbnail: { thumbnails: sources },
+    length: String(metadataParts.find((part) => /^\d{1,2}:\d{2}/.test(part?.text?.content || ''))?.text?.content || ''),
+  };
+}
+
+export function playlistResultFromInitialData(initialData) {
+  const classicItems = [];
+  const lockupItems = [];
+  let title = '';
+  visitObject(initialData, (node) => {
+    if (node.playlistMetadataRenderer?.title && !title) title = textValue(node.playlistMetadataRenderer.title);
+    if (node.playlistHeaderRenderer?.title && !title) title = textValue(node.playlistHeaderRenderer.title);
+    if (node.playlistVideoRenderer) {
+      const renderer = node.playlistVideoRenderer;
+      classicItems.push({
+        id: renderer.videoId,
+        title: renderer.title,
+        channelTitle: renderer.shortBylineText || renderer.ownerText,
+        thumbnail: renderer.thumbnail,
+        length: renderer.lengthText,
+      });
+    }
+    if (node.lockupViewModel) {
+      const item = lockupPlaylistItem(node.lockupViewModel);
+      if (item) lockupItems.push(item);
+    }
+  });
+  return { items: classicItems.length ? classicItems : lockupItems, metadata: { title } };
+}
+
+async function getPlaylistFromPage(playlistId, timeoutMs) {
+  const response = await axios.get(`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}&hl=en&gl=US`, {
+    timeout: timeoutMs,
+    responseType: 'text',
+    maxContentLength: 20 * 1024 * 1024,
+  });
+  return playlistResultFromInitialData(extractYouTubeInitialData(response.data));
+}
+
 async function getPlaylistWithInnertube(playlistId, timeoutMs) {
   const client = await Innertube.create({
     lang: 'en',
@@ -140,6 +235,7 @@ export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
   minimumVideoCount = 1,
   getInnertubeData = getPlaylistWithInnertube,
   getPlaylistData = GetPlaylistData,
+  getPageData = getPlaylistFromPage,
 } = {}) {
   if (!/^PL[\w-]+$/.test(playlistId || '')) throw new Error('Invalid YouTube playlist ID');
   const requiredCount = Math.max(1, Math.trunc(Number(minimumVideoCount) || 1));
@@ -163,12 +259,21 @@ export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
   } catch (error) {
     innertubeError = error;
   }
+  let fallbackError;
   try {
     const result = await runWithTimeout(() => getPlaylistData(playlistId, 100));
     const normalized = normalizePlaylistResult(result, playlistId, seedTopics);
     if (normalized.discoveredVideoCount < requiredCount) throw new Error(`page fallback returned only ${normalized.discoveredVideoCount} of ${requiredCount} expected videos`);
     return normalized;
-  } catch (fallbackError) {
-    throw new Error(`YouTube playlist APIs unavailable (Innertube: ${innertubeError?.message || 'unknown'}; page fallback: ${fallbackError.message})`);
+  } catch (error) {
+    fallbackError = error;
+  }
+  try {
+    const result = await runWithTimeout(() => getPageData(playlistId, timeoutMs));
+    const normalized = normalizePlaylistResult(result, playlistId, seedTopics);
+    if (normalized.discoveredVideoCount < requiredCount) throw new Error(`page parser returned only ${normalized.discoveredVideoCount} of ${requiredCount} expected videos`);
+    return normalized;
+  } catch (pageError) {
+    throw new Error(`YouTube playlist APIs unavailable (Innertube: ${innertubeError?.message || 'unknown'}; library fallback: ${fallbackError?.message || 'unknown'}; page parser: ${pageError.message})`);
   }
 }
