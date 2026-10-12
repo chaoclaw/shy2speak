@@ -84,6 +84,17 @@ async function main() {
   await page.goto(`${origin}/#/practice`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
   assert.equal(await page.locator('#topicSelect option').count(), 85, 'all 85 playlist topics should render');
+  assert.equal(await page.locator('.top-avatar').textContent(), '登录', 'anonymous users should see a neutral sign-in affordance');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  const anonymousMobileOverflow = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth > innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth,
+    offenders: [...document.querySelectorAll('body *')].filter((node) => node.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map((node) => `${node.tagName}.${node.className}`),
+  }));
+  assert.equal(anonymousMobileOverflow.overflow, false, `anonymous sign-in affordance must not overflow the mobile header: ${JSON.stringify(anonymousMobileOverflow)}`);
+  await page.setViewportSize({ width: 1440, height: 900 });
   assert.ok((await page.locator('#topicSelect option').first().textContent()).includes('商场英语词汇'), 'topic picker should show English and the current-language title');
   assert.equal(await page.locator('.chapters-card .chapter').count(), 2, 'catalog chapters should render');
   assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 2, 'server-synced sentence lyrics should render');
@@ -93,6 +104,12 @@ async function main() {
   assert.equal(await page.locator('#globalHoverToast').textContent(), '学习概览', 'sidebar buttons should show hover guidance');
   await page.locator('.top-actions .share-page').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === '分享当前页面');
+  await page.click('#sidebarCollapse');
+  assert.equal(await page.locator('html').getAttribute('data-sidebar-collapsed'), 'true', 'desktop sidebar should collapse on demand');
+  await page.waitForFunction(() => document.querySelector('.sidebar').getBoundingClientRect().width < 100);
+  assert.ok((await page.locator('.sidebar').boundingBox()).width < 100, 'collapsed sidebar should use icon-only width');
+  await page.click('#sidebarCollapse');
+  assert.equal(await page.locator('html').getAttribute('data-sidebar-collapsed'), 'false', 'desktop sidebar should expand again');
 
   await page.evaluate(() => localStorage.setItem('shy-language', 'en'));
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -100,6 +117,7 @@ async function main() {
   assert.equal(await page.locator('html').getAttribute('lang'), 'en', 'saved English should apply before the app becomes visible');
   assert.equal(await page.locator('body').evaluate((node) => getComputedStyle(node).opacity), '1', 'the app should become visible after applying the saved language');
   assert.equal(await page.locator('#pageTitle').textContent(), 'Video practice', 'refresh should restore the English interface');
+  assert.equal(await page.locator('.top-avatar').textContent(), 'Sign in', 'anonymous account affordance should follow the interface language');
   await page.locator('#languageToggle').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === 'Switch interface language to Chinese');
   assert.equal(await page.locator('#languageToggle').getAttribute('aria-label'), 'Switch interface language to Chinese', 'top-right language guidance should follow the interface language');
@@ -154,11 +172,18 @@ async function main() {
   assert.equal(await page.locator('#authAccount').getAttribute('type'), 'tel', 'phone auth must use a separate tel input');
   assert.ok((await page.locator('#modalBody').textContent()).includes('真实账号服务已连接'), 'auth dialog must no longer be a demo flow');
   await page.click('[data-auth-method="email"]');
+  const authInputLayout = await page.evaluate(() => {
+    const input = document.querySelector('#authAccount').getBoundingClientRect();
+    const body = document.querySelector('#modalBody').getBoundingClientRect();
+    return { insideLeft: input.left >= body.left, insideRight: input.right <= body.right, width: input.width, bodyWidth: body.width };
+  });
+  assert.ok(authInputLayout.insideLeft && authInputLayout.insideRight && authInputLayout.width <= authInputLayout.bodyWidth, 'auth inputs must remain inside the modal edges');
   await page.fill('#authAccount', 'learner@example.com');
   await page.fill('#authPassword', 'correct-password');
   await page.locator('#modalActions .primary-btn').click();
   await page.waitForFunction(() => !document.querySelector('#appModal').open);
   await page.waitForFunction(() => document.querySelector('#backendStatus').textContent.includes('已登录'));
+  assert.notEqual(await page.locator('.top-avatar').textContent(), '登录', 'authenticated users should see their profile avatar');
   assert.equal(await page.locator('#nicknameInput').inputValue(), 'NasLearner', 'authenticated profile should hydrate from the self-hosted backend adapter');
   assert.ok((await page.locator('#syncStateTitle').textContent()).includes('同步'), 'login must run a learning-state synchronization');
   assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
@@ -179,11 +204,32 @@ async function main() {
   assert.equal(await page.locator('.word-list-item').count(), 2, 'deleted words should leave every visible wordbook immediately');
 
   await page.evaluate(() => window.navigate('listening'));
-  await page.click('[data-playlist-id="checkout"]');
-  assert.equal(await page.locator('#listeningTrackTitle').textContent(), '结账场景', 'listening playlists should switch to real course test data');
-  assert.equal(await page.locator('#listeningLines .listen-line').count(), 2, 'selected listening playlist should render its real sentence queue');
+  assert.equal(await page.locator('#listeningQueue .queue-track').count(), 85, 'all real course videos should populate the listening audio queue');
+  assert.equal(await page.locator('#listeningPlaylistList .playlist-item').count(), 1, 'legacy listening test playlists must be removed');
+  assert.equal((await page.locator('#view-listening').textContent()).includes('测试集'), false, 'listening UI must not expose legacy test data');
+  const firstListeningTitle = await page.locator('#listeningQueue .queue-track strong').first().textContent();
+  await page.click('#editPlaylist');
+  await page.locator('#listeningQueue .queue-track').first().dragTo(page.locator('#listeningQueue .queue-track').nth(1));
+  assert.notEqual(await page.locator('#listeningQueue .queue-track strong').first().textContent(), firstListeningTitle, 'dragging must persistently reorder listening tracks');
+  assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('shy-listening-course-order-v1') || '[]').length)), 85, 'edited course order must be persisted');
+  await page.click('#editPlaylist');
+  await page.click('#newPlaylist');
+  const playlistSelectLayout = await page.evaluate(() => {
+    const input = document.querySelector('#newListeningPlaylistName').getBoundingClientRect();
+    const select = document.querySelector('#newListeningPlaylistSort');
+    const selectRect = select.getBoundingClientRect(); const body = document.querySelector('#modalBody').getBoundingClientRect();
+    return { fieldsFit: input.right <= body.right && selectRect.right <= body.right, arrowPosition: getComputedStyle(select).backgroundPosition };
+  });
+  assert.ok(playlistSelectLayout.fieldsFit, 'new-playlist fields must remain inside the modal');
+  assert.ok(playlistSelectLayout.arrowPosition.includes('12px'), 'select arrow should have comfortable right-edge spacing');
+  await page.locator('#appModal').evaluate((dialog) => dialog.close());
+  await page.click('#audioPlay');
+  await page.waitForSelector('.listening-youtube-frame');
+  assert.equal(await page.locator('.youtube-frame').count(), 0, 'listening playback must not leave the practice player running');
   await page.click('#nextAudio');
-  assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('2 / 2'), 'listening next-track control should work');
+  assert.ok((await page.locator('#listeningTrackMeta').textContent()).includes('/ 85'), 'listening next-track control should move through the 85-video queue');
+  await page.evaluate(() => window.navigate('practice'));
+  assert.equal(await page.locator('.listening-youtube-frame').count(), 0, 'opening video practice must stop listening playback');
 
   await page.click('#notificationButton');
   assert.ok((await page.locator('#modalTitle').textContent()).includes('通知'), 'notification button should open the notification center');

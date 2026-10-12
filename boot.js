@@ -9,6 +9,7 @@
     const language = localStorage.getItem('shy-language') === 'en' ? 'en' : 'zh';
     root.dataset.mode = resolvedMode;
     root.dataset.theme = theme;
+    root.dataset.sidebarCollapsed = localStorage.getItem('shy-sidebar-collapsed') === 'true' ? 'true' : 'false';
     root.lang = language === 'en' ? 'en' : 'zh-CN';
     root.style.colorScheme = resolvedMode;
   } catch {
