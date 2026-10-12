@@ -23,6 +23,7 @@ const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
 const CODE_TTL_MINUTES = 10;
 const YOUTUBE_CAPTIONS_ENABLED = process.env.YOUTUBE_CAPTIONS_ENABLED !== 'false';
+const YOUTUBE_CAPTION_TRANSLATION_LANGUAGE = String(process.env.YOUTUBE_CAPTION_TRANSLATION_LANGUAGE || 'zh-Hans').trim();
 const YOUTUBE_PLAYLIST_SYNC_ENABLED = process.env.YOUTUBE_PLAYLIST_SYNC_ENABLED !== 'false';
 const captionCacheHours = Number(process.env.YOUTUBE_CAPTION_CACHE_HOURS || 168);
 const YOUTUBE_CAPTION_CACHE_HOURS = Number.isFinite(captionCacheHours) ? Math.max(1, captionCacheHours) : 168;
@@ -303,7 +304,9 @@ async function hydratedYouTubeTopic(topic) {
     [topic.videoId],
   );
   const cached = cachedResult.rows[0];
-  if (cached && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
+  const cachedHasCurrentTranslation = !YOUTUBE_CAPTION_TRANSLATION_LANGUAGE
+    || cached?.payload?.captionTranslationLanguage === YOUTUBE_CAPTION_TRANSLATION_LANGUAGE;
+  if (cached && cachedHasCurrentTranslation && new Date(cached.expires_at).getTime() > Date.now()) return cached.payload;
   if (!YOUTUBE_CAPTIONS_ENABLED || Number(captionFailureCooldowns.get(topic.videoId) || 0) > Date.now()) {
     return cached?.payload || topic;
   }
@@ -311,7 +314,7 @@ async function hydratedYouTubeTopic(topic) {
 
   const sync = (async () => {
     try {
-      const payload = await fetchYouTubeTopic(topic);
+      const payload = await fetchYouTubeTopic(topic, { translationLanguage: YOUTUBE_CAPTION_TRANSLATION_LANGUAGE });
       await pool.query(
         'insert into youtube_catalog_cache(video_id, payload, fetched_at, expires_at) values ($1, $2, now(), now() + ($3::text || \' hours\')::interval) on conflict (video_id) do update set payload = excluded.payload, fetched_at = excluded.fetched_at, expires_at = excluded.expires_at',
         [topic.videoId, payload, String(YOUTUBE_CAPTION_CACHE_HOURS)],
@@ -500,7 +503,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v23',
+    release: 'v24',
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });

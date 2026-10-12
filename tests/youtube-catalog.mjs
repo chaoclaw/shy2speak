@@ -14,6 +14,16 @@ assert.equal(sentences.length, 3);
 assert.equal(sentences[0].en, 'Hello and welcome to this lesson.');
 assert.ok(sentences.every((sentence, index) => index === 0 || sentence.start >= sentences[index - 1].end), 'sentences must not overlap');
 
+const translatedSentences = segmentSubtitleRows(subtitles, [
+  { start: '0.20', dur: '1.60', text: '你好，欢迎' },
+  { start: '1.50', dur: '1.80', text: '来到本课。' },
+  { start: '3.50', dur: '2.00', text: '今天我们练习口语' },
+  { start: '5.40', dur: '1.60', text: '并建立自信！' },
+  { start: '10.00', dur: '2.00', text: '现在请跟我读。' },
+]);
+assert.equal(translatedSentences[0].zh, '你好，欢迎来到本课。');
+assert.ok(translatedSentences.every((sentence) => sentence.zh), 'translated captions should align with every segmented English sentence');
+
 const chapterSeeds = chaptersFromDescription('0:00 Introduction\n0:10 Repeat after me', 12);
 assert.deepEqual(chapterSeeds, [{ start: 0, title: 'Introduction' }, { start: 10, title: 'Repeat after me' }]);
 
@@ -36,12 +46,20 @@ globalThis.fetch = async (input) => {
       videoDetails: { title: 'Fetched title', shortDescription: '0:00 Full lesson' },
       captions: {
         playerCaptionsTracklistRenderer: {
-          captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0', vssId: 'a.en', languageCode: 'en' }],
+          captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0', vssId: 'a.en', languageCode: 'en', isTranslatable: true }],
         },
       },
     });
   }
   if (String(input).includes('/api/timedtext')) {
+    if (String(input).includes('tlang=zh-Hans')) {
+      return Response.json({
+        events: [
+          { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: '这是真实字幕。' }] },
+          { tStartMs: 1800, dDurationMs: 2200, segs: [{ utf8: '请清楚地练习。' }] },
+        ],
+      });
+    }
     return Response.json({
       events: [
         { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: 'This is the real caption.' }] },
@@ -56,6 +74,9 @@ try {
   assert.equal(fetched.title, 'Fetched title');
   assert.equal(fetched.transcriptOrigin, 'youtube-auto-captions');
   assert.equal(fetched.chapters[0].sentences.length, 2);
+  assert.equal(fetched.captionTranslationLanguage, 'zh-Hans');
+  assert.equal(fetched.translatedSentenceCount, 2);
+  assert.equal(fetched.chapters[0].sentences[0].zh, '这是真实字幕。');
 } finally {
   globalThis.fetch = originalFetch;
 }
