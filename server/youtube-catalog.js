@@ -172,7 +172,7 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
         ? 'youtube-auto-captions'
         : 'youtube-public-captions',
     captionLanguage: details.captionLanguage || 'en',
-    captionSchemaVersion: 3,
+    captionSchemaVersion: 4,
     captionTranslationLanguage: details.translationLanguage || '',
     captionTranslationSourceLanguage: details.translationSourceLanguage || '',
     translatedSentenceCount: sentences.filter((sentence) => sentence.zh).length,
@@ -206,9 +206,12 @@ async function fetchTranslatedSubtitles(track, language, timedFetch, direct = fa
   url.searchParams.set('fmt', 'json3');
   if (!direct) url.searchParams.set('tlang', language);
   const response = await timedFetch(url);
-  if (!response.ok) throw new Error(`Translated caption fetch failed: ${response.status}`);
-  const payload = await response.json();
-  return (payload.events || []).flatMap((event) => {
+  const body = await response.text();
+  let events = [];
+  if (response.ok && body.trim()) {
+    try { events = JSON.parse(body).events || []; } catch { /* Older translated tracks use XML instead. */ }
+  }
+  const rows = events.flatMap((event) => {
     if (!event.segs || event.aAppend === 1) return [];
     const text = cleanCaption(event.segs.map((segment) => segment.utf8 || '').join(''));
     if (!text) return [];
@@ -218,6 +221,24 @@ async function fetchTranslatedSubtitles(track, language, timedFetch, direct = fa
       text,
     }];
   });
+  if (rows.length) return rows;
+
+  const xmlUrl = new URL(url);
+  xmlUrl.searchParams.delete('fmt');
+  const xmlResponse = await timedFetch(xmlUrl);
+  const xml = await xmlResponse.text();
+  const xmlRows = [];
+  for (const match of xml.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)) {
+    const start = match[1].match(/\bstart="([^"]+)"/i)?.[1];
+    const dur = match[1].match(/\bdur="([^"]+)"/i)?.[1] || '0';
+    const text = cleanCaption(match[2]);
+    if (Number.isFinite(Number(start)) && text) xmlRows.push({ start, dur, text });
+  }
+  if (xmlRows.length) return xmlRows;
+  if (!response.ok || !xmlResponse.ok) {
+    throw new Error(`Translated caption fetch failed: json3=${response.status}, xml=${xmlResponse.status}`);
+  }
+  return [];
 }
 
 export async function fetchYouTubeTopic(topic, { timeoutMs = 10_000, translationLanguage = 'zh-Hans' } = {}) {

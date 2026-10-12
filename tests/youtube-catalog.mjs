@@ -47,21 +47,17 @@ globalThis.fetch = async (input) => {
       captions: {
         playerCaptionsTracklistRenderer: {
           captionTracks: [
-            { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=zh-Hant', vssId: '.zh-Hant', languageCode: 'zh-Hant', isTranslatable: true },
             { baseUrl: 'https://www.youtube.com/api/timedtext?v=VFe7Ap1kfk0&lang=en', vssId: 'a.en', languageCode: 'en', isTranslatable: true },
           ],
+          translationLanguages: [{ languageCode: 'zh-Hant' }],
         },
       },
     });
   }
   if (String(input).includes('/api/timedtext')) {
-    if (String(input).includes('lang=zh-Hant')) {
-      return Response.json({
-        events: [
-          { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: '這是真實字幕。' }] },
-          { tStartMs: 1800, dDurationMs: 2200, segs: [{ utf8: '請清楚地練習。' }] },
-        ],
-      });
+    if (String(input).includes('tlang=zh-Hant')) {
+      if (String(input).includes('fmt=json3')) return new Response('', { status: 200 });
+      return new Response('<transcript><text start="0" dur="1.8">這是真實字幕。</text><text start="1.8" dur="2.2">請清楚地練習。</text></transcript>', { status: 200, headers: { 'Content-Type': 'text/xml' } });
     }
     return Response.json({
       events: [
