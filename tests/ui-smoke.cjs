@@ -97,6 +97,8 @@ async function main() {
   await page.goto(`${origin}/#/practice`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
   assert.equal(await page.locator('#topicSelect option').count(), 85, 'all 85 playlist topics should render');
+  assert.match(await page.locator('#topicSelect option').first().textContent(), /^1\. /, 'video topics should be numbered from one');
+  assert.match(await page.locator('#topicSelect option').last().textContent(), /^85\. /, 'the complete video topic list should end at 85');
   assert.equal(await page.locator('.top-avatar').textContent(), '登录', 'anonymous users should see a neutral sign-in affordance');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
@@ -158,7 +160,7 @@ async function main() {
 
   await page.click('#youtubePlay');
   await page.waitForSelector('.youtube-frame');
-  assert.equal(await page.locator('#practiceTopicTitle').textContent(), 'Live YouTube lesson', 'runtime YouTube metadata should update the title');
+  assert.equal(await page.locator('#practiceTopicTitle').textContent(), '1. Live YouTube lesson', 'runtime YouTube metadata should update the numbered title');
   assert.equal(await page.locator('.youtube-frame').count(), 1, 'official YouTube player should be mounted');
 
   await page.locator('.chapter').nth(1).click();
@@ -223,6 +225,8 @@ async function main() {
 
   await page.evaluate(() => { Object.defineProperty(window, '__SHY2SPEAK_CONFIG__', { configurable: true, value: { apiBase: '/api' } }); window.navigate('listening'); });
   assert.equal(await page.locator('#listeningQueue .queue-track').count(), 85, 'all real course videos should populate the listening audio queue');
+  assert.equal(await page.locator('#listeningQueue .queue-track .drag-handle').first().textContent(), '1', 'audio tracks should be numbered from one');
+  assert.equal(await page.locator('#listeningQueue .queue-track .drag-handle').last().textContent(), '85', 'the complete audio queue should end at 85');
   assert.equal(await page.locator('#listeningPlaylistList .playlist-item').count(), 1, 'legacy listening test playlists must be removed');
   assert.equal((await page.locator('#view-listening').textContent()).includes('测试集'), false, 'listening UI must not expose legacy test data');
   const firstListeningTitle = await page.locator('#listeningQueue .queue-track strong').first().textContent();

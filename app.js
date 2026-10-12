@@ -554,6 +554,14 @@ function topicDisplayLabel(topic) {
   return `${topic.title} · ${localized || '中文译名待生成'}`;
 }
 
+function numberedTopicLabel(topic, index) {
+  return `${index + 1}. ${topicDisplayLabel(topic)}`;
+}
+
+function topicCatalogIndex(topic) {
+  return Math.max(0, (state.catalog?.topics || []).findIndex((candidate) => candidate.id === topic?.id));
+}
+
 async function ensureTopicTitleTranslation(topic) {
   if (!topic?.videoId || state.language === 'en' || localizedTopicTitle(topic)) return;
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
@@ -651,7 +659,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=33', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=34', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -685,7 +693,7 @@ async function loadCatalog() {
 
 function applyTopicMetadataToUI(topic) {
   if (!topic) return;
-  $('#practiceTopicTitle').textContent = topic.title;
+  $('#practiceTopicTitle').textContent = `${topicCatalogIndex(topic) + 1}. ${topic.title}`;
   const localized = localizedTopicTitle(topic);
   $('#practiceTopicLocalizedTitle').hidden = state.language === 'en';
   $('#practiceTopicLocalizedTitle').textContent = localized || '中文译名待生成';
@@ -703,10 +711,10 @@ function applyTopicMetadataToUI(topic) {
 function renderTopicSelect() {
   if (!state.catalog) return;
   const select = $('#topicSelect');
-  select.replaceChildren(...state.catalog.topics.map((topic) => {
+  select.replaceChildren(...state.catalog.topics.map((topic, index) => {
     const option = document.createElement('option');
     option.value = topic.id;
-    option.textContent = topicDisplayLabel(topic);
+    option.textContent = numberedTopicLabel(topic, index);
     option.selected = topic.id === state.topicId;
     return option;
   }));
@@ -1410,7 +1418,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-    const response = await fetch('./data/vocabulary.json?v=33', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=34', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1590,7 +1598,7 @@ function renderListeningQueue() {
     const row = document.createElement('div');
     row.className = `queue-track${index === state.listeningTrackIndex ? ' active' : ''}`;
     row.dataset.queueIndex = index; row.draggable = state.listeningEditMode; row.tabIndex = 0; row.setAttribute('role', 'button');
-    const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = state.listeningEditMode ? '≡' : String(index + 1).padStart(2, '0');
+    const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = state.listeningEditMode ? '≡' : String(index + 1);
     const copyNode = document.createElement('div');
     const title = document.createElement('strong'); title.textContent = topic.title;
     const localized = document.createElement('small'); localized.textContent = localizedTopicTitle(topic, 'zh') || topic.channelTitle || 'YouTube';
@@ -1644,7 +1652,7 @@ function renderListeningPlaylist({ resetTime = true } = {}) {
     $('#listeningTrackMeta').textContent = '0 / 0'; renderListeningLyrics(null); return;
   }
   $('#listeningTopic').textContent = (localizedTopicTitle(topic, 'zh') || topic.title).toUpperCase();
-  $('#listeningTrackTitle').textContent = topic.title;
+  $('#listeningTrackTitle').textContent = `${state.listeningTrackIndex + 1}. ${topic.title}`;
   $('#listeningTrackMeta').textContent = `${localizedTopicTitle(topic, 'zh') || topic.channelTitle || 'YouTube'} · ${state.listeningTrackIndex + 1} / ${playlist.tracks.length}`;
   $('#listeningPoster').src = topic.thumbnail || `https://i.ytimg.com/vi/${topic.videoId}/hqdefault.jpg`;
   $('#listeningPoster').alt = topic.title;
