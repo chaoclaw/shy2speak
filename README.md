@@ -51,7 +51,7 @@ ghcr.io/chaoclaw/shy2speak:edge
 
 字幕不会在首次打开时同时请求 85 份；只在用户选中某个主题时，NAS 才读取该视频的公开英语字幕与 YouTube 提供的简体中文翻译轨道，按句对齐时间轴，并将结果缓存到 PostgreSQL 7 天。可通过 `YOUTUBE_CAPTION_TRANSLATION_LANGUAGE` 修改或关闭服务端翻译目标，默认值为 `zh-Hans`。若视频描述包含 `0:00 标题` 形式的章节时间戳，也会自动拆分为对应小节。静态预览不会使用虚构示例句；YouTube 暂时不可达或视频没有公开英语字幕时，会明确显示“字幕待同步”。
 
-“磨耳朵”会从同一课程目录生成 85 条真实音轨队列，并使用音乐播放器与滚动歌词界面。NAS 复用项目已有的 MIT 许可 `youtubei.js`，优先选择最低带宽的纯音频格式并以支持 Range 的同源流提供给浏览器；不加载视频画面，也不在服务器持久保存媒体。纯音频流不可用时会自动切换兼容播放引擎。进入视频练习与启动磨耳朵时会互相停止另一个播放器。用户列表与拖动顺序保存在当前设备；手机端也可使用上下箭头调整。
+“磨耳朵”会从同一课程目录生成 85 条真实音轨队列，并使用音乐播放器与滚动歌词界面。NAS 优先通过开源 `yt-dlp` 解析最低带宽的纯音频格式，并以支持 Range 的同源流提供给浏览器；不加载视频画面，也不在服务器持久保存媒体。`youtubei.js` 作为第二解析器，纯音频仍不可用时才自动切换兼容播放引擎。进入视频练习与启动磨耳朵时会互相停止另一个播放器。用户列表与拖动顺序保存在当前设备；手机端也可使用上下箭头调整。
 
 如 GHCR 镜像尚未设为公开，需在绿联镜像仓库中登录 `ghcr.io`，或把本仓库克隆到 NAS 后使用 `compose.yml` 本地构建。
 
@@ -80,7 +80,7 @@ docker compose -f compose.ugreen.yml exec -T database pg_dump -U shy2speak shy2s
 ## 数据与服务边界
 
 - 视频学习使用 `youtube-nocookie.com` 官方嵌入播放器。磨耳朵的低流量模式只为已配置课程临时代理音频字节，不写入磁盘、不建立公共下载链接；部署者应确保对所配置内容拥有必要权限并遵守来源平台条款。
-- 播放列表发现和低流量音频选择使用 MIT 许可的 `youtubei.js`，并以同样为 MIT 许可的 `youtube-search-api` 作为播放列表备用；公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`。YouTube 仅提供繁体中文翻译时，服务端使用 MIT/Apache-2.0 许可的纯 JavaScript `opencc-js` 转换为简体中文。`youtubei.js` 使用的是非官方内部接口，来源平台变化时可能需要随版本更新。
+- 低流量音频优先使用 Unlicense 许可的 `yt-dlp` 2026.08.19（构建时校验官方 SHA-256），再回退到 MIT 许可的 `youtubei.js`。播放列表发现使用 `youtubei.js`，并以同样为 MIT 许可的 `youtube-search-api` 作为备用；公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`。YouTube 仅提供繁体中文翻译时，服务端使用 MIT/Apache-2.0 许可的纯 JavaScript `opencc-js` 转换为简体中文。这些解析器使用非官方接口，来源平台变化时可能需要随版本更新。
 - `data/catalog.json` 保存课程结构。逐句稿会标记来源；未获得公开视频字幕时仍显示“待核对”，不会冒充准确字幕。
 - 麦克风录音使用浏览器 `MediaRecorder`。只有配置真实评分端点并返回完整评分后，才保存 AI 分数。
 - AI Key 只保存在当前浏览器标签页；生产环境后续可把指定厂商调用迁移到 NAS API 代理。

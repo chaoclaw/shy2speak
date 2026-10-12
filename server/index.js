@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -14,6 +15,7 @@ import { fetchYouTubePlaylist, preparePlaylistTopics } from './youtube-playlist.
 
 const { Pool } = pg;
 const scrypt = promisify(crypto.scrypt);
+const execFileAsync = promisify(execFile);
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(serverDirectory, '..');
 const catalogPath = path.join(publicDirectory, 'data', 'catalog.json');
@@ -28,6 +30,7 @@ const CODE_TTL_MINUTES = 10;
 const YOUTUBE_CAPTIONS_ENABLED = process.env.YOUTUBE_CAPTIONS_ENABLED !== 'false';
 const YOUTUBE_CAPTION_TRANSLATION_LANGUAGE = String(process.env.YOUTUBE_CAPTION_TRANSLATION_LANGUAGE || 'zh-Hans').trim();
 const YOUTUBE_PLAYLIST_SYNC_ENABLED = process.env.YOUTUBE_PLAYLIST_SYNC_ENABLED !== 'false';
+const YTDLP_PATH = process.env.YTDLP_PATH || '/usr/local/bin/yt-dlp';
 const captionCacheHours = Number(process.env.YOUTUBE_CAPTION_CACHE_HOURS || 168);
 const YOUTUBE_CAPTION_CACHE_HOURS = Number.isFinite(captionCacheHours) ? Math.max(1, captionCacheHours) : 168;
 const playlistCacheHours = Number(process.env.YOUTUBE_PLAYLIST_CACHE_HOURS || 24);
@@ -281,6 +284,7 @@ const captionFailureCooldowns = new Map();
 const playlistSyncPromises = new Map();
 const playlistFailureCooldowns = new Map();
 const youtubeAudioFormatCache = new Map();
+const youtubeAudioFormatPromises = new Map();
 let youtubeAudioClientPromise;
 
 async function youtubeAudioClient() {
@@ -291,14 +295,85 @@ async function youtubeAudioClient() {
   return youtubeAudioClientPromise;
 }
 
+function audioMimeType(format = {}) {
+  const extension = String(format.audio_ext || format.ext || '').toLowerCase();
+  if (extension === 'm4a' || extension === 'mp4') return 'audio/mp4';
+  if (extension === 'opus' || extension === 'ogg') return 'audio/ogg';
+  if (extension === 'mp3') return 'audio/mpeg';
+  return 'audio/webm';
+}
+
+function safeYouTubeAudioUrl(value) {
+  const url = new URL(String(value || ''));
+  const hostname = url.hostname.toLowerCase();
+  const allowed = hostname === 'googlevideo.com' || hostname.endsWith('.googlevideo.com');
+  if (url.protocol !== 'https:' || !allowed) throw new Error('Resolved audio URL is not a trusted Google media host');
+  return url.toString();
+}
+
+function youtubeAudioRequestHeaders(headers = {}) {
+  const allowed = new Set(['accept', 'accept-language', 'origin', 'referer', 'user-agent']);
+  return Object.fromEntries(Object.entries(headers)
+    .filter(([key, value]) => allowed.has(key.toLowerCase()) && typeof value === 'string' && value.length <= 1000));
+}
+
+async function youtubeAudioFormatWithYtDlp(videoId) {
+  const { stdout } = await execFileAsync(YTDLP_PATH, [
+    '--ignore-config',
+    '--no-playlist',
+    '--no-warnings',
+    '--no-progress',
+    '--no-cache-dir',
+    '--js-runtimes', `node:${process.execPath}`,
+    '--format', 'worstaudio[acodec!=none][vcodec=none]/bestaudio[acodec!=none][vcodec=none]',
+    '--dump-single-json',
+    `https://www.youtube.com/watch?v=${videoId}`,
+  ], { encoding: 'utf8', timeout: 45_000, maxBuffer: 8 * 1024 * 1024 });
+  const payload = JSON.parse(stdout);
+  const candidates = [...(Array.isArray(payload.requested_downloads) ? payload.requested_downloads : []), payload];
+  const format = candidates.find((candidate) => candidate?.url && candidate.vcodec === 'none')
+    || candidates.find((candidate) => candidate?.url);
+  if (!format) throw new Error('yt-dlp returned no playable audio format');
+  return {
+    url: safeYouTubeAudioUrl(format.url),
+    mime_type: audioMimeType(format),
+    has_video: format.vcodec && format.vcodec !== 'none',
+    requestHeaders: youtubeAudioRequestHeaders(format.http_headers || payload.http_headers),
+    resolver: 'yt-dlp',
+  };
+}
+
+async function youtubeAudioFormatWithYouTubeJs(videoId) {
+  const client = await youtubeAudioClient();
+  const format = await client.getStreamingData(videoId, { type: 'audio', quality: 'bestefficiency', format: 'any', language: 'original' });
+  return { ...format, resolver: 'youtubei.js' };
+}
+
 async function youtubeAudioFormat(videoId) {
   const cached = youtubeAudioFormatCache.get(videoId);
   if (cached?.expiresAt > Date.now()) return cached.format;
-  const client = await youtubeAudioClient();
-  const format = await client.getStreamingData(videoId, { type: 'audio', quality: 'bestefficiency', format: 'any', language: 'original' });
-  if (!format?.url || !/^https?:/.test(format.url) || format.has_video) throw new Error('Audio-only stream is unavailable');
-  youtubeAudioFormatCache.set(videoId, { format, expiresAt: Date.now() + 5 * 60 * 1000 });
-  return format;
+  if (youtubeAudioFormatPromises.has(videoId)) return youtubeAudioFormatPromises.get(videoId);
+  const resolution = (async () => {
+    let format;
+    try {
+      format = await youtubeAudioFormatWithYtDlp(videoId);
+    } catch (ytDlpError) {
+      console.warn('yt-dlp audio resolution unavailable:', videoId, ytDlpError.message);
+      try {
+        format = await youtubeAudioFormatWithYouTubeJs(videoId);
+      } catch (youtubeJsError) {
+        console.warn('youtubei.js audio fallback unavailable:', videoId, youtubeJsError.message);
+        throw new HttpError(502, '课程纯音频源暂时不可用，播放器将切换兼容模式。', 'audio_resolver_unavailable');
+      }
+    }
+    if (!format?.url || !/^https?:/.test(format.url) || format.has_video) {
+      throw new HttpError(502, '没有找到可用的纯音频格式，播放器将切换兼容模式。', 'audio_only_format_unavailable');
+    }
+    youtubeAudioFormatCache.set(videoId, { format, expiresAt: Date.now() + 5 * 60 * 1000 });
+    return format;
+  })().finally(() => youtubeAudioFormatPromises.delete(videoId));
+  youtubeAudioFormatPromises.set(videoId, resolution);
+  return resolution;
 }
 
 async function baseCatalog() {
@@ -527,8 +602,9 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v32',
+    release: 'v33',
     database: 'postgresql',
+    audio: { primaryResolver: 'yt-dlp', fallbackResolver: 'youtubei.js' },
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
 }));
@@ -558,10 +634,20 @@ app.get('/api/youtube/audio/:videoId', rateLimit(60 * 1000, 300), asyncRoute(asy
   const format = await youtubeAudioFormat(videoId);
   const controller = new AbortController();
   request.once('aborted', () => controller.abort());
-  const upstream = await fetch(format.url, {
-    headers: { ...(request.get('range') ? { Range: request.get('range') } : {}), 'User-Agent': request.get('user-agent') || 'Shy2Speak/1.0' },
-    signal: controller.signal,
-  });
+  let upstream;
+  try {
+    upstream = await fetch(format.url, {
+      headers: {
+        ...(format.requestHeaders || {}),
+        ...(request.get('range') ? { Range: request.get('range') } : {}),
+        'User-Agent': format.requestHeaders?.['User-Agent'] || format.requestHeaders?.['user-agent'] || request.get('user-agent') || 'Shy2Speak/1.0',
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    console.warn('YouTube audio upstream unavailable:', videoId, format.resolver, error.message);
+    throw new HttpError(502, '课程音频连接暂时不可用。', 'audio_upstream_unavailable');
+  }
   if (!upstream.ok || !upstream.body) throw new HttpError(502, '课程音频暂时不可用。', 'audio_upstream_unavailable');
   response.status(upstream.status);
   for (const header of ['content-length', 'content-range', 'accept-ranges', 'last-modified']) {
@@ -571,6 +657,7 @@ app.get('/api/youtube/audio/:videoId', rateLimit(60 * 1000, 300), asyncRoute(asy
     'Content-Type': upstream.headers.get('content-type') || format.mime_type || 'audio/webm',
     'Accept-Ranges': upstream.headers.get('accept-ranges') || 'bytes',
     'Cache-Control': 'private, max-age=300',
+    'X-Shy2Speak-Audio-Resolver': format.resolver || 'unknown',
   });
   await pipeline(Readable.fromWeb(upstream.body), response);
 }));

@@ -32,7 +32,8 @@ assert.match(server, /fetchYouTubeTopic/, 'NAS API must sync public YouTube capt
 assert.match(server, /fetchYouTubePlaylist/, 'NAS API must discover all public playlist topics server-side');
 assert.match(server, /\/api\/catalog\/topics\/:videoId/, 'NAS API must hydrate one topic on demand');
 assert.match(server, /\/api\/youtube\/audio\/:videoId/, 'NAS API must expose low-data course audio streaming');
-assert.match(server, /type: 'audio', quality: 'bestefficiency'/, 'course audio must select an audio-only bandwidth-efficient format');
+assert.match(server, /worstaudio\[acodec!=none\]\[vcodec=none\]/, 'course audio must ask yt-dlp for a bandwidth-efficient audio-only format');
+assert.match(server, /audio_resolver_unavailable/, 'course audio resolver failures must produce an actionable API error');
 assert.match(server, /\/api\/vocabulary/, 'NAS API must expose account vocabulary');
 assert.match(server, /\/api\/vocabulary\/delete-everywhere/, 'NAS API must persist cleanup across every wordbook');
 assert.match(server, /validateAvatar/, 'profile API must validate uploaded avatars');
@@ -42,6 +43,8 @@ assert.doesNotMatch(compose, /\$\{/, 'UGREEN compose must not require external e
 assert.match(compose, /&postgres-password/, 'UGREEN compose must define its database password in one place');
 assert.match(compose, /&auth-secret/, 'UGREEN compose must define its auth secret in one place');
 assert.match(dockerfile, /USER node/, 'application image must run as a non-root user');
+assert.match(dockerfile, /yt-dlp_musllinux/, 'application image must include the maintained yt-dlp audio resolver');
+assert.match(dockerfile, /sha256sum -c/, 'yt-dlp binary must be checksum-verified during the image build');
 assert.match(workflow, /linux\/amd64,linux\/arm64/, 'image workflow must publish both common NAS architectures');
 assert.doesNotMatch(browserAdapter, /supabase/i, 'browser backend must not depend on Supabase');
 
