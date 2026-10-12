@@ -7,7 +7,7 @@ import express from 'express';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
 import { fetchYouTubeTopic } from './youtube-catalog.js';
-import { fetchYouTubePlaylist } from './youtube-playlist.js';
+import { fetchYouTubePlaylist, preparePlaylistTopics } from './youtube-playlist.js';
 
 const { Pool } = pg;
 const scrypt = promisify(crypto.scrypt);
@@ -15,6 +15,7 @@ const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(serverDirectory, '..');
 const catalogPath = path.join(publicDirectory, 'data', 'catalog.json');
 const vocabularyPath = path.join(publicDirectory, 'data', 'vocabulary.json');
+const topicTitleTranslationsPath = path.join(publicDirectory, 'data', 'topic-title-translations.json');
 const PORT = Number(process.env.PORT || 8080);
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const AUTH_SECRET = process.env.AUTH_SECRET || '';
@@ -283,6 +284,18 @@ async function baseCatalog() {
   return catalog;
 }
 
+let topicTitleTranslationsCache;
+async function topicTitleTranslations() {
+  if (!topicTitleTranslationsCache) {
+    const parsed = JSON.parse(await fs.readFile(topicTitleTranslationsPath, 'utf8'));
+    if (!parsed.titles || typeof parsed.titles !== 'object' || Array.isArray(parsed.titles)) {
+      throw new Error('Topic title translations are invalid');
+    }
+    topicTitleTranslationsCache = parsed;
+  }
+  return topicTitleTranslationsCache;
+}
+
 async function hydratedYouTubeTopic(topic) {
   if (topic.provider !== 'youtube' || !topic.videoId) return topic;
   const cachedResult = await pool.query(
@@ -368,6 +381,8 @@ async function syncedPlaylist(catalog) {
 async function playlistCatalog() {
   const catalog = await baseCatalog();
   const playlist = await syncedPlaylist(catalog);
+  const translations = await topicTitleTranslations();
+  const topics = preparePlaylistTopics(playlist.topics, translations.titles, catalog.source.topicOrder);
   return {
     ...catalog,
     updatedAt: new Date().toISOString(),
@@ -375,11 +390,11 @@ async function playlistCatalog() {
       ...catalog.source,
       playlistRuntime: 'NAS server public YouTube playlist with PostgreSQL cache',
       captionRuntime: 'NAS server public YouTube captions on demand with PostgreSQL cache',
-      videoCount: playlist.topics.length,
+      videoCount: topics.length,
       playlistSyncStatus: playlist.syncStatus || 'cached',
       ...(playlist.syncError ? { playlistSyncError: playlist.syncError } : {}),
     },
-    topics: playlist.topics,
+    topics,
   };
 }
 
@@ -485,7 +500,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v21',
+    release: 'v22',
     database: 'postgresql',
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });

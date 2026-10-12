@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { extractYouTubeInitialData, fetchYouTubePlaylist, normalizePlaylistResult, playlistResultFromInitialData } from '../server/youtube-playlist.js';
+import { extractYouTubeInitialData, fetchYouTubePlaylist, normalizePlaylistResult, playlistResultFromInitialData, preparePlaylistTopics } from '../server/youtube-playlist.js';
 
 const playlistId = 'PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ';
 const result = {
@@ -24,6 +24,14 @@ assert.equal(normalized.topics[0].localizedTitles.zh, '商场英语词汇', 'kno
 assert.equal(normalized.topics[0].serverManaged, true);
 assert.equal(normalized.topics[1].thumbnail, 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg');
 assert.equal(normalized.topics[1].chapters[0].title, 'Full video');
+
+const prepared = preparePlaylistTopics(normalized.topics, {
+  VFe7Ap1kfk0: { zh: '商场英语词汇' },
+  abcdefghijk: { zh: '英语点咖啡' },
+}, 'oldest-first');
+assert.deepEqual(prepared.map((topic) => topic.videoId), ['abcdefghijk', 'VFe7Ap1kfk0'], 'oldest-first courses must reverse the provider order');
+assert.equal(prepared[0].localizedTitles.zh, '英语点咖啡', 'server title translations must be merged into every topic');
+assert.deepEqual(normalized.topics.map((topic) => topic.videoId), ['VFe7Ap1kfk0', 'abcdefghijk'], 'preparing topics must not mutate the cached provider result');
 
 let call;
 const fetched = await fetchYouTubePlaylist(playlistId, seed, {

@@ -230,6 +230,17 @@ export function normalizePlaylistResult(result, playlistId, seedTopics = []) {
   };
 }
 
+export function preparePlaylistTopics(topics, titleTranslations = {}, topicOrder = 'provider') {
+  const prepared = (Array.isArray(topics) ? topics : []).map((topic) => ({
+    ...topic,
+    localizedTitles: {
+      ...(topic.localizedTitles || {}),
+      ...(titleTranslations[topic.videoId] || {}),
+    },
+  }));
+  return topicOrder === 'oldest-first' ? prepared.reverse() : prepared;
+}
+
 export async function fetchYouTubePlaylist(playlistId, seedTopics = [], {
   timeoutMs = 20_000,
   minimumVideoCount = 1,

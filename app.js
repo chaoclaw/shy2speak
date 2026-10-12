@@ -663,7 +663,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=21', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=22', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -674,7 +674,13 @@ async function loadCatalog() {
     const customTopics = readStoredJSON(STORAGE_KEYS.customTopics, []);
     state.catalog = { ...catalog, topics: [...catalog.topics, ...customTopics] };
     const cachedMetadata = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
-    state.catalog.topics.forEach((topic) => { if (cachedMetadata[topic.videoId]) Object.assign(topic, cachedMetadata[topic.videoId]); });
+    state.catalog.topics.forEach((topic) => {
+      const cached = cachedMetadata[topic.videoId];
+      if (!cached) return;
+      Object.assign(topic, cached, {
+        localizedTitles: { ...(cached.localizedTitles || {}), ...(topic.localizedTitles || {}) },
+      });
+    });
     if (!state.catalog.topics.some((topic) => topic.id === state.topicId)) state.topicId = state.catalog.topics[0]?.id || '';
     const topic = currentTopic();
     if (!topic?.chapters?.some((chapter) => chapter.id === state.chapterId)) state.chapterId = topic?.chapters?.[0]?.id || '';
@@ -802,7 +808,10 @@ async function refreshYouTubeMetadata(topic) {
   if (!topic?.videoId) return;
   const cached = readStoredJSON(STORAGE_KEYS.youtubeMetadata, {});
   if (cached[topic.videoId]) {
-    Object.assign(topic, cached[topic.videoId]);
+    const stored = cached[topic.videoId];
+    Object.assign(topic, stored, {
+      localizedTitles: { ...(stored.localizedTitles || {}), ...(topic.localizedTitles || {}) },
+    });
     applyTopicMetadataToUI(topic); renderTopicSelect();
   }
   if (topic.serverManaged && ['playlist-synced-public-metadata', 'server-synced-public-metadata'].includes(topic.metadataStatus)) return;
@@ -1395,7 +1404,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=21', { cache: 'no-cache' });
+    const response = await fetch('./data/vocabulary.json?v=22', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
