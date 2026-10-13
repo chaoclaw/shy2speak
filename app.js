@@ -381,6 +381,80 @@ function renderAnalyticsOverview() {
   }
 }
 
+function skillReportSnapshot() {
+  const sentenceStats = Object.entries(analytics.data.sentences || {});
+  const scores = sentenceStats.flatMap(([sentenceKey, item]) => (item.scores || []).map((score) => ({ ...score, sentenceKey })))
+    .filter((score) => Number.isFinite(Number(score.total)))
+    .sort((left, right) => (Date.parse(left.createdAt || 0) || 0) - (Date.parse(right.createdAt || 0) || 0));
+  const average = (field) => {
+    const values = scores.map((score) => Number(score[field])).filter(Number.isFinite);
+    return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+  };
+  return {
+    scores,
+    averages: { total: average('total'), pronunciation: average('pronunciation'), fluency: average('fluency'), completeness: average('completeness') },
+    latest: scores.at(-1) || null,
+    previous: scores.at(-2) || null,
+    practiceCount: sentenceStats.reduce((sum, [, item]) => sum + Number(item.practiceCount || 0), 0),
+    practicedSentences: sentenceStats.filter(([, item]) => Number(item.practiceCount || 0) > 0).length,
+    practiceSeconds: Number(analytics.data.views?.practice?.practiceSeconds || 0),
+    listeningSeconds: Number(analytics.data.views?.listening?.practiceSeconds || 0),
+    vocabularyCount: $$('.word-list-item').length,
+  };
+}
+
+function openSkillReport() {
+  const report = skillReportSnapshot();
+  const english = state.language === 'en';
+  const scoreText = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : '—';
+  const metricLabels = english
+    ? { pronunciation: 'Pronunciation', fluency: 'Fluency', completeness: 'Completeness' }
+    : { pronunciation: '发音准确度', fluency: '流利度', completeness: '完整度' };
+  const metricRows = Object.entries(metricLabels).map(([key, label]) => {
+    const value = report.averages[key];
+    return `<div class="skill-report-metric"><div><span>${label}</span><strong>${scoreText(value)}</strong></div><i><b style="width:${Number.isFinite(value) ? Math.min(100, value) : 0}%"></b></i></div>`;
+  }).join('');
+  const weakest = Object.keys(metricLabels)
+    .filter((key) => Number.isFinite(report.averages[key]))
+    .sort((left, right) => report.averages[left] - report.averages[right])[0];
+  const delta = report.latest && report.previous ? Math.round(Number(report.latest.total) - Number(report.previous.total)) : null;
+  const trend = delta === null
+    ? (english ? 'Baseline established' : '已建立能力基线')
+    : delta > 0
+      ? (english ? `Up ${delta} points from the previous score` : `较上次提升 ${delta} 分`)
+      : delta < 0
+        ? (english ? `Down ${Math.abs(delta)} points from the previous score` : `较上次下降 ${Math.abs(delta)} 分`)
+        : (english ? 'Same as the previous score' : '与上次得分持平');
+  const history = report.scores.slice(-6).reverse().map((score) => {
+    const date = Date.parse(score.createdAt || 0) ? new Date(score.createdAt).toLocaleDateString(english ? 'en-US' : 'zh-CN', { month: 'short', day: 'numeric' }) : '—';
+    return `<li><span>${escapeHTML(date)}</span><b>${scoreText(score.total)}</b><small>${english ? 'Overall score' : '综合评分'}</small></li>`;
+  }).join('');
+  const practiceMinutes = Math.round(report.practiceSeconds / 60);
+  const listeningMinutes = Math.round(report.listeningSeconds / 60);
+  const body = report.scores.length ? `
+    <section class="skill-report" data-report-state="scored">
+      <div class="skill-report-summary"><div><span>${english ? 'Average score' : '综合均分'}</span><strong>${scoreText(report.averages.total)}</strong><small id="skillReportScoreCount">${report.scores.length} ${english ? 'verified scores' : '次真实评分'}</small></div><p><b>${escapeHTML(trend)}</b><small>${weakest ? (english ? `Current focus: ${metricLabels[weakest]}` : `当前建议重点：${metricLabels[weakest]}`) : ''}</small></p></div>
+      <div class="skill-report-metrics">${metricRows}</div>
+      <div class="skill-report-facts"><span><b>${report.practiceCount}</b><small>${english ? 'sentence attempts' : '逐句练习次数'}</small></span><span><b>${practiceMinutes}</b><small>${english ? 'practice minutes' : '跟读分钟'}</small></span><span><b>${listeningMinutes}</b><small>${english ? 'listening minutes' : '听力分钟'}</small></span><span><b>${report.vocabularyCount}</b><small>${english ? 'saved words' : '生词数量'}</small></span></div>
+      <div class="skill-report-history"><strong>${english ? 'Recent verified scores' : '最近真实评分'}</strong><ul>${history}</ul></div>
+      <p class="skill-report-note">${english ? 'This report uses only completed pronunciation scores and recorded practice activity; missing data is never estimated.' : '本报告只使用已完成的真实语音评分和学习记录；缺失数据不会使用估算值。'}</p>
+    </section>` : `
+    <section class="skill-report" id="skillReportEmpty" data-report-state="empty">
+      <div class="skill-report-empty"><span>◎</span><strong>${english ? 'No verified pronunciation scores yet' : '尚无真实发音评分'}</strong><p>${english ? 'Complete a sentence recording with a connected AI speech service to establish your skill baseline.' : '连接支持语音的 AI 服务并完成一句跟读评分后，即可建立能力基线。'}</p></div>
+      <div class="skill-report-facts"><span><b>${report.practiceCount}</b><small>${english ? 'sentence attempts' : '逐句练习次数'}</small></span><span><b>${practiceMinutes}</b><small>${english ? 'practice minutes' : '跟读分钟'}</small></span><span><b>${listeningMinutes}</b><small>${english ? 'listening minutes' : '听力分钟'}</small></span><span><b>${report.vocabularyCount}</b><small>${english ? 'saved words' : '生词数量'}</small></span></div>
+      <p class="skill-report-note">${english ? 'Practice activity is shown as recorded. No sample score is inserted.' : '已有练习数据会如实展示，不会插入示例评分。'}</p>
+    </section>`;
+  showModal({
+    eyebrow: 'LEARNING REPORT',
+    title: english ? 'Skill progress report' : '能力变化报告',
+    body,
+    actions: [
+      { label: english ? 'Close' : '关闭' },
+      { label: english ? 'Continue practice' : '继续跟读', style: 'primary', onClick: () => navigate('practice') },
+    ],
+  });
+}
+
 const copy = {
   zh: {
     navOverview: '学习概览', navPractice: '视频学习', navVocabulary: '生词本', navListening: '磨耳朵', navStudio: '内容工作台', navAI: 'AI 服务', navSettings: '设置',
@@ -672,7 +746,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=35', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=38', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1232,6 +1306,7 @@ function setupGlobalControls() {
     applyLanguage();
     toast(state.language === 'zh' ? '界面语言已切换为简体中文。' : 'Interface language changed to English.');
   });
+  $('#skillReportButton').addEventListener('click', openSkillReport);
   $$('.segmented').forEach((group) => {
     if (group.id === 'lyricsLanguage' || group.id === 'practiceModeTabs') return;
     $$('button', group).forEach((button) => button.addEventListener('click', () => {
@@ -1554,7 +1629,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=35', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=38', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -1570,17 +1645,24 @@ function openVocabularyCleanup() {
   if (!cleanupItems.length) { toast('当前没有待清理生词。'); return; }
   showModal({
     eyebrow: 'VOCABULARY CLEANUP', title: '检查待清理生词',
-    body: `<p>这些词已从默认生词本移除，但仍保存在其他生词本中。</p><label class="cleanup-select-all"><input id="cleanupSelectAll" type="checkbox" checked><strong>全选 / 全不选</strong><small id="cleanupSelectionCount">已选择 ${cleanupItems.length} / ${cleanupItems.length}</small></label><div class="cleanup-list">${cleanupItems.map((item) => `<label><input type="checkbox" data-cleanup-word="${escapeHTML(item.id)}" checked><span><strong>${escapeHTML(item.term)}</strong><small>仍在：${escapeHTML(item.books.map((book) => book.name).join('、'))}</small></span></label>`).join('')}</div>`,
+    body: `<p>这些词已从默认生词本移除，但仍保存在其他生词本中。</p><p class="cleanup-feedback hidden" id="cleanupFeedback" role="status"></p><label class="cleanup-select-all"><input id="cleanupSelectAll" type="checkbox" checked><strong>全选 / 全不选</strong><small id="cleanupSelectionCount">已选择 ${cleanupItems.length} / ${cleanupItems.length}</small></label><div class="cleanup-list">${cleanupItems.map((item) => `<label><input type="checkbox" data-cleanup-word="${escapeHTML(item.id)}" checked><span><strong>${escapeHTML(item.term)}</strong><small>仍在：${escapeHTML(item.books.map((book) => book.name).join('、'))}</small></span></label>`).join('')}</div>`,
     actions: [{ label: '保留在其他生词本' }, { label: '从所有生词本删除', style: 'primary', onClick: async () => {
       const selectedIds = $$('[data-cleanup-word]:checked', $('#appModal')).map((input) => input.dataset.cleanupWord);
-      if (!selectedIds.length) { toast('请至少选择一个生词。'); return false; }
-      if (!state.authSession) { toast('请先登录账号，再从所有生词本永久删除。'); return false; }
-      const result = await shyBackend.deleteVocabularyEverywhere(selectedIds);
-      const deleted = new Set(result.deletedIds || []);
+      const feedback = $('#cleanupFeedback');
+      const showFeedback = (message) => { feedback.textContent = message; feedback.classList.remove('hidden'); };
+      if (!selectedIds.length) { showFeedback('请至少选择一个生词。'); return false; }
+      if (!state.authSession) { showFeedback('需要先登录账号，才能从所有生词本永久删除；当前列表尚未更改。'); return false; }
+      await shyBackend.deleteVocabularyEverywhere(selectedIds);
+      const deleted = new Set(selectedIds);
       state.vocabularyData.items = state.vocabularyData.items.filter((item) => !deleted.has(item.id));
+      if (deleted.has(state.activeWordId)) state.activeWordId = state.vocabularyData.items[0]?.id || '';
       writeStoredJSON(STORAGE_KEYS.vocabulary, state.vocabularyData);
       renderVocabulary();
-      toast(`已从所有生词本删除 ${result.deletedCount || deleted.size} 个词。`);
+      try {
+        const refreshed = await shyBackend.getVocabulary();
+        if (Array.isArray(refreshed?.items)) { state.vocabularyData = refreshed; writeStoredJSON(STORAGE_KEYS.vocabulary, refreshed); renderVocabulary(); }
+      } catch (error) { console.warn('Vocabulary refresh after deletion unavailable; keeping the confirmed local update.', error.message); }
+      setTimeout(() => toast(`已从所有生词本删除 ${deleted.size} 个词，待清理列表已更新。`), 0);
     } }],
   });
   const selectAll = $('#cleanupSelectAll');

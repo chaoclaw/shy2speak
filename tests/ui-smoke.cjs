@@ -89,7 +89,7 @@ async function main() {
       const selected = new Set(route.request().postDataJSON().word_ids);
       const deletedIds = vocabularyFixture.items.filter((item) => selected.has(item.id)).map((item) => item.id);
       vocabularyFixture.items = vocabularyFixture.items.filter((item) => !selected.has(item.id));
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deletedIds, deletedCount: deletedIds.length }) });
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deletedIds: [], deletedCount: 0, alreadyAbsent: deletedIds }) });
     }
     return route.continue();
   });
@@ -198,6 +198,14 @@ async function main() {
     assert.ok(await page.locator(`#view-${view}`).evaluate((node) => node.classList.contains('active')), `${view} must be navigable`);
   }
 
+  await page.evaluate(() => window.navigate('vocabulary'));
+  await page.click('#cleanupOpen');
+  await page.locator('#modalActions .primary-btn').click();
+  assert.equal(await page.locator('#appModal').evaluate((dialog) => dialog.open), true, 'unauthenticated cleanup should keep the dialog open');
+  assert.ok((await page.locator('#cleanupFeedback').textContent()).includes('先登录账号'), 'cleanup login guidance should render inside the modal instead of behind it');
+  assert.equal(await page.locator('#cleanupCount').textContent(), '3', 'an unauthenticated delete attempt must not mutate the cleanup list');
+  await page.locator('#appModal').evaluate((dialog) => dialog.close());
+
   await page.evaluate(() => window.navigate('settings'));
   await page.locator('#reduceMotion').check({ force: true }); await page.locator('#highContrast').check({ force: true });
   assert.equal(await page.locator('html').getAttribute('data-reduce-motion'), 'true', 'reduce motion setting should apply');
@@ -230,6 +238,13 @@ async function main() {
   assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest', 'newer cloud preferences should hydrate locally');
 
+  await page.evaluate(() => window.navigate('overview'));
+  await page.click('#skillReportButton');
+  assert.equal(await page.locator('[data-report-state="scored"]').count(), 1, 'skill report button should open a report backed by verified scores');
+  assert.equal(await page.locator('#skillReportScoreCount').textContent(), '1 次真实评分', 'skill report should expose the real verified-score count');
+  assert.ok((await page.locator('#modalBody').textContent()).includes('91'), 'skill report should display the synchronized real score');
+  await page.locator('#modalActions .secondary-btn').click();
+
   await page.evaluate(() => window.navigate('vocabulary'));
   await page.waitForFunction(() => document.querySelector('#wordList')?.textContent.includes('shopping mall'));
   assert.equal(await page.locator('.word-list-item').count(), 5, 'topic-linked Mall Vocabulary seed words should render');
@@ -243,6 +258,8 @@ async function main() {
   await page.waitForFunction(() => !document.querySelector('#appModal').open);
   assert.equal(vocabularyDeleteCalls, 1, 'cleanup must call the authenticated delete-everywhere API');
   assert.equal(await page.locator('.word-list-item').count(), 2, 'deleted words should leave every visible wordbook immediately');
+  assert.equal(await page.locator('#cleanupCount').textContent(), '0', 'successful cleanup should immediately reset the pending count');
+  assert.equal(await page.locator('#cleanupOpen').isDisabled(), true, 'cleanup entry should disable when no pending words remain');
 
   await page.evaluate(() => { Object.defineProperty(window, '__SHY2SPEAK_CONFIG__', { configurable: true, value: { apiBase: '/api' } }); window.navigate('listening'); });
   assert.equal(await page.locator('#listeningQueue .queue-track').count(), 85, 'all real course videos should populate the listening audio queue');
