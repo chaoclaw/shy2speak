@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=39"></script>
-    <link rel="stylesheet" href="./styles.css?v=39" />
+    <script src="./boot.js?v=40"></script>
+    <link rel="stylesheet" href="./styles.css?v=40" />
   </head>
   <body>
     <div class="app-shell">
@@ -22,7 +22,7 @@
         <nav class="side-nav">
           <button class="nav-item active" data-view-link="overview"><span>⌂</span><b data-i18n="navOverview">学习概览</b></button>
           <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
-          <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em id="navVocabularyCount">5</em></button>
+          <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em id="navVocabularyCount">0</em></button>
           <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
           <button class="nav-item" data-view-link="studio"><span>✦</span><b data-i18n="navStudio">内容工作台</b></button>
           <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
@@ -75,17 +75,17 @@
               </article>
 
               <article class="focus-card card">
-                <div class="card-heading"><div><span class="eyebrow">TODAY</span><h3>今日复习</h3></div><span class="count-badge" id="reviewCount">5</span></div>
-                <div class="focus-word"><span>/ˈkɒnfɪdəns/</span><strong>confidence</strong><small>信心；自信</small></div>
-                <div class="mini-progress"><span style="width: 68%"></span></div>
-                <button class="primary-btn full" data-view-link="vocabulary">开始 5 分钟复习</button>
+                <div class="card-heading"><div><span class="eyebrow">TODAY</span><h3>今日复习</h3></div><span class="count-badge" id="reviewCount">0</span></div>
+                <div class="focus-word" id="reviewFocus"><span>VOCABULARY</span><strong>暂无待复习生词</strong><small>真实添加的生词会出现在这里</small></div>
+                <div class="mini-progress"><span style="width: 0"></span></div>
+                <button class="primary-btn full" data-view-link="vocabulary">查看生词本</button>
               </article>
             </div>
 
             <div class="metric-grid">
               <article class="metric-card card"><span class="metric-icon violet">↗</span><div><small>本机学习</small><strong><span id="metricPracticeMinutes">0</span> <i>分钟</i></strong><em id="metricPracticeCount">0 次练习</em></div></article>
               <article class="metric-card card"><span class="metric-icon mint">◎</span><div><small>真实评分均值</small><strong><span id="metricAverageScore">—</span> <i>分</i></strong><em id="metricScoreCount">尚无 AI 评分</em></div></article>
-              <article class="metric-card card"><span class="metric-icon amber">◇</span><div><small>当前生词</small><strong><span id="metricVocabularyCount">5</span> <i>个</i></strong><em>本机词库</em></div></article>
+              <article class="metric-card card"><span class="metric-icon amber">◇</span><div><small>当前生词</small><strong><span id="metricVocabularyCount">0</span> <i>个</i></strong><em>本机词库</em></div></article>
               <article class="metric-card card"><span class="metric-icon blue">♪</span><div><small>磨耳朵</small><strong><span id="metricListeningMinutes">0</span> <i>分钟</i></strong><em>本机记录</em></div></article>
             </div>
 
@@ -195,12 +195,12 @@
           <!-- Vocabulary -->
           <section class="view" id="view-vocabulary" data-title-zh="生词本" data-title-en="Vocabulary">
             <div class="page-heading">
-              <div><span class="eyebrow">VOCABULARY LIBRARY</span><h1>我的生词本</h1><p id="vocabularySummary">5 个词 · Mall Vocabulary In English</p></div>
+              <div><span class="eyebrow">VOCABULARY LIBRARY</span><h1>我的生词本</h1><p id="vocabularySummary">0 个词</p></div>
               <div class="button-row"><button class="secondary-btn" id="cleanupOpen">待清理 <span class="count-inline" id="cleanupCount">3</span></button><button class="primary-btn">开始复习 →</button></div>
             </div>
 
-            <div class="cleanup-banner" id="cleanupBanner">
-              <div><span>♢</span><p><strong id="cleanupBannerTitle">有 3 个词已从默认生词本移除</strong><small id="cleanupBannerMeta">它们仍保存在其他生词本中，需要检查吗？最多再提醒 2 次。</small></p></div>
+            <div class="cleanup-banner hidden" id="cleanupBanner">
+              <div><span>♢</span><p><strong id="cleanupBannerTitle">没有待清理生词</strong><small id="cleanupBannerMeta">所有生词关系都已整理完成。</small></p></div>
               <div class="button-row"><button class="text-btn" id="dismissCleanup">不再提示</button><button class="secondary-btn" id="reviewCleanup">检查生词</button></div>
             </div>
 
@@ -211,26 +211,20 @@
 
             <div class="vocab-toolbar card">
               <div class="search-box"><span>⌕</span><input id="vocabSearch" placeholder="搜索单词、翻译或标签" /></div>
-              <label>生词本<select id="wordbookSelect"><option>全部生词本</option><option>默认生词本</option><option>商场设施</option><option>购物词汇</option><option>本周复习</option></select></label>
+              <label>生词本<select id="wordbookSelect"><option>全部生词本</option><option>默认生词本</option></select></label>
               <button class="filter-btn">更多筛选</button>
             </div>
 
             <div class="vocab-layout">
-              <div class="word-list card" id="wordList">
-                <button class="word-list-item active" data-word-id="shopping-mall"><div><strong>shopping mall</strong><span>/ˈʃɑːpɪŋ mɔːl/</span><small>购物中心；商场</small></div><em>今日复习</em></button>
-                <button class="word-list-item" data-word-id="cashier"><div><strong>cashier</strong><span>/kæˈʃɪr/</span><small>收银员</small></div><em>学习中</em></button>
-                <button class="word-list-item" data-word-id="escalator"><div><strong>escalator</strong><span>/ˈeskəleɪtər/</span><small>自动扶梯</small></div><em>待清理</em></button>
-                <button class="word-list-item" data-word-id="fitting-room"><div><strong>fitting room</strong><span>/ˈfɪtɪŋ ruːm/</span><small>试衣间</small></div><em>待清理</em></button>
-                <button class="word-list-item" data-word-id="receipt"><div><strong>receipt</strong><span>/rɪˈsiːt/</span><small>收据；小票</small></div><em>待清理</em></button>
-              </div>
+              <div class="word-list card" id="wordList"><div class="vocabulary-empty"><span>＋</span><strong>还没有生词</strong><small>这里仅显示你实际保存的单词和短语。</small></div></div>
 
-              <article class="word-detail card">
-                <div class="word-detail-head"><div><span class="pill" id="detailTypeLevel">NOUN · A2</span><h2 id="detailWord">shopping mall</h2><p><span id="detailPhonetic">/ˈʃɑːpɪŋ mɔːl/</span><button class="sound-btn">🔊</button></p></div><div class="button-row"><button class="icon-btn share-page">↗</button><button class="primary-btn compact" id="detailBookStatus">已在默认生词本 ✓</button></div></div>
-                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition" dir="auto">购物中心；商场</strong><p id="definitionText" dir="auto">一座包含许多商店，有时也包括餐厅和娱乐场所的大型建筑。</p><div class="example"><span>COURSE EXAMPLE</span><p id="detailExample">The shopping mall has stores on three floors.</p><small id="detailExampleTranslation" dir="auto">这家商场有三层店铺。</small><button id="detailVideoLink" data-view-link="practice">▶ 打开视频</button></div></div></div>
+              <article class="word-detail card hidden" id="wordDetail">
+                <div class="word-detail-head"><div><span class="pill" id="detailTypeLevel">WORD</span><h2 id="detailWord">—</h2><p><span id="detailPhonetic"></span><button class="sound-btn">🔊</button></p></div><div class="button-row"><button class="icon-btn share-page">↗</button><button class="primary-btn compact" id="detailBookStatus">已在默认生词本 ✓</button></div></div>
+                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition" dir="auto">—</strong><p id="definitionText" dir="auto"></p><div class="example"><span>COURSE EXAMPLE</span><p id="detailExample"></p><small id="detailExampleTranslation" dir="auto"></small><button id="detailVideoLink" data-view-link="practice">▶ 打开视频</button></div></div></div>
 
-                <div class="word-family"><div class="card-heading"><h3>词根、近义词与双向链接</h3><button class="text-btn">查看知识网络 →</button></div><div class="family-links" id="detailRelated"><button>mall</button><button>department store</button><button>shopping center</button></div></div>
+                <div class="word-family"><div class="card-heading"><h3>词根、近义词与双向链接</h3><button class="text-btn">查看知识网络 →</button></div><div class="family-links" id="detailRelated"></div></div>
 
-                <div class="media-links"><div class="card-heading"><h3>关联的视频与音频</h3><span>1 个真实主题</span></div><button class="media-link" data-view-link="practice"><span class="media-thumb cover-purple">▶</span><div><strong id="detailMediaTitle">Mall Vocabulary In English</strong><small id="detailMediaMeta">Full video · VFe7Ap1kfk0 · YouTube 官方播放</small></div><em>→</em></button><button class="media-link" data-view-link="listening"><span class="media-thumb cover-teal">♪</span><div><strong>Mall Vocabulary · 学习音频</strong><small>字幕同步后可生成并缓存</small></div><em>→</em></button></div>
+                <div class="media-links"><div class="card-heading"><h3>关联的视频与音频</h3><span>0 个真实主题</span></div><button class="media-link" data-view-link="practice"><span class="media-thumb cover-purple">▶</span><div><strong id="detailMediaTitle">—</strong><small id="detailMediaMeta"></small></div><em>→</em></button></div>
               </article>
             </div>
           </section>
@@ -332,9 +326,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=39"></script>
-    <script src="./i18n.js?v=39"></script>
-    <script src="./backend.js?v=39"></script>
-    <script src="./app.js?v=39"></script>
+    <script src="./runtime-config.js?v=40"></script>
+    <script src="./i18n.js?v=40"></script>
+    <script src="./backend.js?v=40"></script>
+    <script src="./app.js?v=40"></script>
   </body>
 </html>

@@ -14,7 +14,7 @@ const state = {
   playModeIndex: 1,
   definitionLanguage: localStorage.getItem('shy-definition-language') || 'zh',
   vocabularyData: null,
-  activeWordId: 'shopping-mall',
+  activeWordId: '',
   vocabularyRemoved: false,
   cleanupReminder: 1,
   catalog: null,
@@ -746,7 +746,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=39', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=40', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1559,7 +1559,9 @@ function vocabularyTranslation(item) {
 }
 
 function renderVocabularyDetail(item) {
-  if (!item) return;
+  const detail = $('#wordDetail');
+  if (!item) { detail?.classList.add('hidden'); return; }
+  detail?.classList.remove('hidden');
   const translation = vocabularyTranslation(item);
   state.activeWordId = item.id;
   $('#detailTypeLevel').textContent = `${String(item.partOfSpeech || 'word').toUpperCase()} · ${item.level || '—'}`;
@@ -1577,8 +1579,8 @@ function renderVocabularyDetail(item) {
     const button = document.createElement('button'); button.textContent = word; return button;
   }));
   const source = state.vocabularyData?.source || {};
-  $('#detailMediaTitle').textContent = source.title || 'Mall Vocabulary In English';
-  $('#detailMediaMeta').textContent = `${source.chapterTitle || 'Full video'} · ${source.videoId || 'VFe7Ap1kfk0'} · YouTube 官方播放`;
+  $('#detailMediaTitle').textContent = source.title || '—';
+  $('#detailMediaMeta').textContent = source.videoId ? `${source.chapterTitle || 'Full video'} · ${source.videoId} · YouTube 官方播放` : '';
   $$('.word-list-item').forEach((button) => button.classList.toggle('active', button.dataset.wordId === item.id));
 }
 
@@ -1597,7 +1599,7 @@ function renderVocabulary() {
     return matchesQuery && matchesBook;
   });
   const list = $('#wordList');
-  list.replaceChildren(...items.map((item) => {
+  const nodes = items.map((item) => {
     const button = document.createElement('button');
     button.className = 'word-list-item'; button.dataset.wordId = item.id;
     const content = document.createElement('div');
@@ -1607,7 +1609,15 @@ function renderVocabulary() {
     const status = document.createElement('em'); status.textContent = item.reviewState || (item.removedFromDefault ? '待清理' : '学习中');
     content.append(term, phonetic, definition); button.append(content, status);
     return button;
-  }));
+  });
+  if (!nodes.length) {
+    const empty = document.createElement('div'); empty.className = 'vocabulary-empty';
+    const icon = document.createElement('span'); icon.textContent = '＋';
+    const title = document.createElement('strong'); title.textContent = state.language === 'en' ? 'No saved words yet' : '还没有生词';
+    const description = document.createElement('small'); description.textContent = state.language === 'en' ? 'Only words and phrases you actually save will appear here.' : '这里仅显示你实际保存的单词和短语。';
+    empty.append(icon, title, description); nodes.push(empty);
+  }
+  list.replaceChildren(...nodes);
   const active = state.vocabularyData.items.find((item) => item.id === state.activeWordId) || items[0] || state.vocabularyData.items[0];
   renderVocabularyDetail(active);
   const cleanupCount = vocabularyCleanupItems().length;
@@ -1616,9 +1626,14 @@ function renderVocabulary() {
   $('#cleanupBanner').classList.toggle('hidden', cleanupCount === 0 || localStorage.getItem('shy-cleanup-reminder-hidden') === 'true');
   $('#cleanupBannerTitle').textContent = cleanupCount ? `有 ${cleanupCount} 个词已从默认生词本移除` : '没有待清理生词';
   $('#cleanupBannerMeta').textContent = cleanupCount ? '它们仍保存在其他生词本中，需要检查吗？最多再提醒 2 次。' : '所有生词关系都已整理完成。';
-  $('#vocabularySummary').textContent = `${state.vocabularyData.items.length} 个词 · ${state.vocabularyData.source?.title || 'Mall Vocabulary In English'}`;
-  $('#navVocabularyCount').textContent = state.vocabularyData.items.length;
-  $('#reviewCount').textContent = state.vocabularyData.items.length;
+  const count = state.vocabularyData.items.length;
+  $('#vocabularySummary').textContent = state.language === 'en' ? `${count} saved word${count === 1 ? '' : 's'}` : `${count} 个词`;
+  $('#navVocabularyCount').textContent = count;
+  $('#reviewCount').textContent = count;
+  $('#metricVocabularyCount').textContent = count;
+  if (!count && $('#reviewFocus')) $('#reviewFocus').innerHTML = state.language === 'en'
+    ? '<span>VOCABULARY</span><strong>No words due</strong><small>Your saved vocabulary will appear here.</small>'
+    : '<span>VOCABULARY</span><strong>暂无待复习生词</strong><small>真实添加的生词会出现在这里</small>';
 }
 
 async function loadVocabulary() {
@@ -1629,12 +1644,16 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=39', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=40', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
   vocabulary ||= readStoredJSON(STORAGE_KEYS.vocabulary, null);
-  if (!vocabulary?.items?.length) return;
+  if (!vocabulary || !Array.isArray(vocabulary.items)) vocabulary = { version: 2, source: { type: 'user-vocabulary' }, wordbooks: [{ id: 'default', name: '默认生词本' }], items: [] };
+  if (Number(vocabulary.version || 0) < 2) {
+    const legacyDemoIds = new Set(['shopping-mall', 'cashier', 'escalator', 'fitting-room', 'receipt']);
+    vocabulary = { ...vocabulary, version: 2, items: vocabulary.items.filter((item) => !legacyDemoIds.has(item.id)) };
+  }
   state.vocabularyData = vocabulary;
   writeStoredJSON(STORAGE_KEYS.vocabulary, vocabulary);
   renderVocabulary();

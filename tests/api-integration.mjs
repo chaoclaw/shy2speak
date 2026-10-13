@@ -64,15 +64,7 @@ const persistentProfile = await request('/profile', { token: relogged.access_tok
 assert.equal(persistentProfile.signature, 'Persistent NAS profile');
 
 const vocabulary = await request('/vocabulary', { token: relogged.access_token });
-assert.equal(vocabulary.source.videoId, 'VFe7Ap1kfk0');
-assert.ok(vocabulary.items.length === 5 || vocabulary.items.length === 2);
-const cleanupWords = vocabulary.items.filter((item) => item.removedFromDefault);
-if (cleanupWords.length) {
-  assert.equal(cleanupWords.length, 3);
-  const cleaned = await request('/vocabulary/delete-everywhere', { method: 'POST', token: relogged.access_token, body: { word_ids: cleanupWords.map((item) => item.id) } });
-  assert.equal(cleaned.deletedCount, 3);
-}
-const vocabularyAfterCleanup = await request('/vocabulary', { token: relogged.access_token });
-assert.equal(vocabularyAfterCleanup.items.length, 2);
+assert.equal(vocabulary.version, 2);
+assert.deepEqual(vocabulary.items, []);
 
-console.log('api-integration: auth, profile, learning history and vocabulary cleanup persistence valid');
+console.log('api-integration: auth, profile, learning history and empty real vocabulary state valid');

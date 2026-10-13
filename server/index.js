@@ -504,7 +504,7 @@ let vocabularySeedCache;
 async function vocabularySeed() {
   if (!vocabularySeedCache) {
     const parsed = JSON.parse(await fs.readFile(vocabularyPath, 'utf8'));
-    if (!Array.isArray(parsed.items) || !parsed.source?.videoId) throw new Error('Vocabulary seed data is invalid');
+    if (!Array.isArray(parsed.items) || !parsed.source) throw new Error('Vocabulary seed data is invalid');
     vocabularySeedCache = parsed;
   }
   return vocabularySeedCache;
@@ -517,24 +517,10 @@ async function seedVocabularyForUser(client, userId) {
      on conflict (user_id, content_type) do nothing returning user_id`,
     [userId, Number(seed.version || 1)],
   );
-  if (!claimed.rowCount) return seed;
-  for (const item of seed.items) {
-    const payload = { ...item };
-    delete payload.books;
-    delete payload.removedFromDefault;
-    await client.query(
-      `insert into user_vocabulary_items(user_id, word_id, payload, removed_from_default)
-       values ($1, $2, $3, $4) on conflict (user_id, word_id) do nothing`,
-      [userId, item.id, JSON.stringify(payload), Boolean(item.removedFromDefault)],
-    );
-    for (const book of item.books || []) {
-      await client.query(
-        `insert into user_vocabulary_memberships(user_id, word_id, book_id, book_name)
-         values ($1, $2, $3, $4) on conflict do nothing`,
-        [userId, item.id, String(book.id).slice(0, 80), String(book.name).slice(0, 120)],
-      );
-    }
-  }
+  if (!claimed.rowCount) await client.query(
+    `update user_content_seeds set version = $3 where user_id = $1 and content_type = $2 and version < $3`,
+    [userId, 'mall-vocabulary', Number(seed.version || 2)],
+  );
   return seed;
 }
 
@@ -602,7 +588,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v39',
+    release: 'v40',
     database: 'postgresql',
     audio: { primaryResolver: 'yt-dlp', fallbackResolver: 'youtubei.js' },
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },

@@ -57,7 +57,6 @@ const cloudState = {
 };
 const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: __dirname + '/..', stdio: 'ignore' });
 let browser;
-let vocabularyDeleteCalls = 0;
 let savedProfile = null;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,13 +83,7 @@ async function main() {
     if (url === `${origin}/api/profile` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001', nickname: 'NasLearner', signature: 'Synced profile', avatar: '🚀', locale: 'zh', updated_at: '2026-10-11T00:00:00Z' }) });
     if (url === `${origin}/api/profile` && route.request().method() === 'PUT') { savedProfile = route.request().postDataJSON(); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000001', ...savedProfile, updated_at: '2026-10-11T00:00:00Z' }) }); }
     if (url === `${origin}/api/vocabulary` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(vocabularyFixture) });
-    if (url === `${origin}/api/vocabulary/delete-everywhere`) {
-      vocabularyDeleteCalls += 1;
-      const selected = new Set(route.request().postDataJSON().word_ids);
-      const deletedIds = vocabularyFixture.items.filter((item) => selected.has(item.id)).map((item) => item.id);
-      vocabularyFixture.items = vocabularyFixture.items.filter((item) => !selected.has(item.id));
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deletedIds: [], deletedCount: 0, alreadyAbsent: deletedIds }) });
-    }
+    if (url === `${origin}/api/vocabulary/delete-everywhere`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ deletedIds: [], deletedCount: 0 }) });
     return route.continue();
   });
 
@@ -199,12 +192,11 @@ async function main() {
   }
 
   await page.evaluate(() => window.navigate('vocabulary'));
-  await page.click('#cleanupOpen');
-  await page.locator('#modalActions .primary-btn').click();
-  assert.equal(await page.locator('#appModal').evaluate((dialog) => dialog.open), true, 'unauthenticated cleanup should keep the dialog open');
-  assert.ok((await page.locator('#cleanupFeedback').textContent()).includes('先登录账号'), 'cleanup login guidance should render inside the modal instead of behind it');
-  assert.equal(await page.locator('#cleanupCount').textContent(), '3', 'an unauthenticated delete attempt must not mutate the cleanup list');
-  await page.locator('#appModal').evaluate((dialog) => dialog.close());
+  await page.waitForFunction(() => document.querySelector('#vocabularySummary')?.textContent.includes('0'));
+  assert.equal(await page.locator('.word-list-item').count(), 0, 'the unauthenticated vocabulary view must not ship demo words');
+  assert.equal(await page.locator('.vocabulary-empty').count(), 1, 'an honest vocabulary empty state should render');
+  assert.equal(await page.locator('#cleanupOpen').isDisabled(), true, 'cleanup should be disabled when there are no saved words');
+  assert.equal(await page.locator('#navVocabularyCount').textContent(), '0', 'the vocabulary badge should reflect the real empty library');
 
   await page.evaluate(() => window.navigate('settings'));
   await page.locator('#reduceMotion').check({ force: true }); await page.locator('#highContrast').check({ force: true });
@@ -254,20 +246,11 @@ async function main() {
   await page.locator('#modalActions .secondary-btn').click();
 
   await page.evaluate(() => window.navigate('vocabulary'));
-  await page.waitForFunction(() => document.querySelector('#wordList')?.textContent.includes('shopping mall'));
-  assert.equal(await page.locator('.word-list-item').count(), 5, 'topic-linked Mall Vocabulary seed words should render');
-  await page.click('#cleanupOpen');
-  assert.equal(await page.locator('[data-cleanup-word]').count(), 3, 'three removed words should be pending cleanup');
-  assert.equal(await page.locator('[data-cleanup-word]:checked').count(), 3, 'cleanup words should all be selected by default');
-  await page.locator('#cleanupSelectAll').uncheck();
-  assert.equal(await page.locator('[data-cleanup-word]:checked').count(), 0, 'select-all control should clear the full selection');
-  await page.locator('#cleanupSelectAll').check();
-  await page.locator('#modalActions .primary-btn').click();
-  await page.waitForFunction(() => !document.querySelector('#appModal').open);
-  assert.equal(vocabularyDeleteCalls, 1, 'cleanup must call the authenticated delete-everywhere API');
-  assert.equal(await page.locator('.word-list-item').count(), 2, 'deleted words should leave every visible wordbook immediately');
-  assert.equal(await page.locator('#cleanupCount').textContent(), '0', 'successful cleanup should immediately reset the pending count');
-  assert.equal(await page.locator('#cleanupOpen').isDisabled(), true, 'cleanup entry should disable when no pending words remain');
+  await page.waitForFunction(() => document.querySelector('#vocabularySummary')?.textContent.includes('0'));
+  assert.equal(await page.locator('.word-list-item').count(), 0, 'authenticated accounts must start without seeded demo words');
+  assert.equal((await page.locator('#view-vocabulary').textContent()).includes('shopping mall'), false, 'legacy demo vocabulary must not remain in the page');
+  assert.equal(await page.locator('#cleanupCount').textContent(), '0', 'the cleanup count should be zero after demo removal');
+  assert.equal(await page.locator('#reviewCount').textContent(), '0', 'the overview review count should use the real vocabulary total');
 
   await page.evaluate(() => { Object.defineProperty(window, '__SHY2SPEAK_CONFIG__', { configurable: true, value: { apiBase: '/api' } }); window.navigate('listening'); });
   assert.equal(await page.locator('#listeningQueue .queue-track').count(), 85, 'all real course videos should populate the listening audio queue');

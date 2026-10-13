@@ -7,6 +7,7 @@ const browserAdapter = fs.readFileSync(path.join(root, 'backend.js'), 'utf8');
 const server = fs.readFileSync(path.join(root, 'server/index.js'), 'utf8');
 const schema = fs.readFileSync(path.join(root, 'server/migrations/001_init.sql'), 'utf8');
 const vocabularySchema = fs.readFileSync(path.join(root, 'server/migrations/002_vocabulary.sql'), 'utf8');
+const demoCleanupMigration = fs.readFileSync(path.join(root, 'server/migrations/003_remove_demo_vocabulary.sql'), 'utf8');
 const compose = fs.readFileSync(path.join(root, 'compose.ugreen.yml'), 'utf8');
 const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker.yml'), 'utf8');
@@ -36,6 +37,10 @@ assert.match(server, /worstaudio\[acodec!=none\]\[vcodec=none\]/, 'course audio 
 assert.match(server, /audio_resolver_unavailable/, 'course audio resolver failures must produce an actionable API error');
 assert.match(server, /\/api\/vocabulary/, 'NAS API must expose account vocabulary');
 assert.match(server, /\/api\/vocabulary\/delete-everywhere/, 'NAS API must persist cleanup across every wordbook');
+for (const demoWordId of ['shopping-mall', 'cashier', 'escalator', 'fitting-room', 'receipt']) {
+  assert.match(demoCleanupMigration, new RegExp(demoWordId), `demo vocabulary migration must remove ${demoWordId}`);
+}
+assert.match(demoCleanupMigration, /seed\.version < 2/, 'demo vocabulary cleanup must be one-time and preserve later real words');
 assert.match(server, /validateAvatar/, 'profile API must validate uploaded avatars');
 assert.match(compose, /postgres:17-alpine/, 'UGREEN compose must include PostgreSQL');
 assert.match(compose, /ghcr\.io\/chaoclaw\/shy2speak:edge/, 'UGREEN compose must use the published image');

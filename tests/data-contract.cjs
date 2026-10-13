@@ -5,6 +5,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const catalog = JSON.parse(fs.readFileSync(path.join(root, 'data/catalog.json'), 'utf8'));
 const topicTitleTranslations = JSON.parse(fs.readFileSync(path.join(root, 'data/topic-title-translations.json'), 'utf8'));
+const vocabulary = JSON.parse(fs.readFileSync(path.join(root, 'data/vocabulary.json'), 'utf8'));
 
 assert.equal(catalog.schemaVersion, 1, 'catalog schemaVersion must be 1');
 assert.match(catalog.source.playlistId, /^PL[\w-]+$/, 'playlist id is invalid');
@@ -21,6 +22,8 @@ assert.ok(catalog.topics.length > 0, 'at least one topic is required');
 assert.equal(catalog.topics[0].videoId, 'VFe7Ap1kfk0', 'the requested first YouTube video must be the default topic');
 assert.equal(catalog.topics[0].playlistId, 'PL50GkV3cQyq7MzhHP2R-9H84p-cUrYskQ', 'the requested playlist must remain configured');
 assert.ok(catalog.topics.every((topic) => topic.transcriptOrigin !== 'curated-sample'), 'unverified sample copy must not be presented as video captions');
+assert.equal(vocabulary.version, 2, 'vocabulary data must use the post-demo schema version');
+assert.deepEqual(vocabulary.items, [], 'the application must not ship demo vocabulary');
 
 const topicIds = new Set();
 for (const topic of catalog.topics) {
