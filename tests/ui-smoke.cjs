@@ -121,6 +121,13 @@ async function main() {
   await page.click('[data-practice-mode="transcript"]');
   assert.equal(await page.locator('#practiceLyrics .transcript-line').count(), 2, 'full transcript should render every caption sentence');
   await page.click('[data-practice-mode="sentences"]');
+  await page.selectOption('#topicSelect', { index: 1 });
+  assert.equal(await page.locator('#continuePracticeLabel').textContent(), '继续 · 2. 英语课程 2', 'overview continuation should name the last selected video instead of a fixed chapter');
+  await page.evaluate(() => window.navigate('overview'));
+  await page.click('#continuePracticeButton');
+  assert.equal(await page.locator('#view-practice').evaluate((node) => node.classList.contains('active')), true, 'continuation should open video practice');
+  assert.equal(await page.locator('#topicSelect').inputValue(), 'youtube-test0000001', 'continuation should preserve the last selected video');
+  await page.selectOption('#topicSelect', { index: 0 });
 
   await page.locator('.side-nav .nav-item').first().hover();
   await page.waitForSelector('#globalHoverToast.visible');

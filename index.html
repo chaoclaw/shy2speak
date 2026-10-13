@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=36"></script>
-    <link rel="stylesheet" href="./styles.css?v=36" />
+    <script src="./boot.js?v=37"></script>
+    <link rel="stylesheet" href="./styles.css?v=37" />
   </head>
   <body>
     <div class="app-shell">
@@ -65,7 +65,7 @@
                   <h1>欢迎回来，<span id="welcomeNickname">Lin</span> 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
                   <p id="learningInsight">练习时长、次数与评分会保存在当前设备，并实时更新到学习概览。</p>
                   <div class="button-row">
-                    <button class="primary-btn" data-view-link="practice">继续 Chapter 03 <span>→</span></button>
+                    <button class="primary-btn" id="continuePracticeButton" data-view-link="practice"><span id="continuePracticeLabel">继续学习</span><span aria-hidden="true">→</span></button>
                     <button class="secondary-btn" data-view-link="listening">开始磨耳朵</button>
                   </div>
                 </div>
@@ -332,9 +332,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=36"></script>
-    <script src="./i18n.js?v=36"></script>
-    <script src="./backend.js?v=36"></script>
-    <script src="./app.js?v=36"></script>
+    <script src="./runtime-config.js?v=37"></script>
+    <script src="./i18n.js?v=37"></script>
+    <script src="./backend.js?v=37"></script>
+    <script src="./app.js?v=37"></script>
   </body>
 </html>

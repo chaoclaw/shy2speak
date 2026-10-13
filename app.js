@@ -20,7 +20,7 @@ const state = {
   catalog: null,
   topicId: localStorage.getItem('shy-topic-id') || '',
   chapterId: localStorage.getItem('shy-chapter-id') || '',
-  sentenceId: '',
+  sentenceId: localStorage.getItem('shy-sentence-id') || '',
   practiceMode: 'sentences',
   mediaRecorder: null,
   mediaStream: null,
@@ -362,6 +362,17 @@ function renderAnalyticsOverview() {
   $('#skillInsight p').textContent = lastScore ? `最近一次真实评分为 ${Math.round(lastScore.total)} 分；继续练习当前句子以观察变化。` : '连接真实语音评分服务并完成首次跟读后，这里会展示能力变化。';
   const topic = currentTopic();
   if (topic) {
+    const chapter = currentChapter();
+    const topicNumber = topicCatalogIndex(topic) + 1;
+    const localizedTitle = state.language === 'en' ? topic.title : (localizedTopicTitle(topic) || topic.title);
+    const chapterContext = topic.chapters.length > 1 && chapter
+      ? state.language === 'en' ? ` · Chapter ${chapter.index}` : ` · 第 ${chapter.index} 节`
+      : '';
+    const continueLabel = state.language === 'en' ? 'Continue' : '继续';
+    $('#continuePracticeLabel').textContent = `${continueLabel} · ${topicNumber}. ${localizedTitle}${chapterContext}`;
+    $('#continuePracticeButton').setAttribute('aria-label', state.language === 'en'
+      ? `Continue ${topic.title}, chapter ${chapter?.index || 1}`
+      : `继续学习 ${topicNumber}. ${topic.title}${localizedTopicTitle(topic) ? ` / ${localizedTopicTitle(topic)}` : ''}，第 ${chapter?.index || 1} 节`);
     const completed = topic.chapters.filter((chapter) => analytics.ensure('chapters', `${topic.id}:${chapter.id}`).practiceCount > 0).length;
     const progress = topic.chapters.length ? Math.round((completed / topic.chapters.length) * 100) : 0;
     $('#overviewTopicTitle').textContent = topicDisplayLabel(topic);
@@ -802,6 +813,7 @@ function renderPracticeSentences(chapter) {
     return;
   }
   if (!sentences.some((sentence) => sentence.id === state.sentenceId)) state.sentenceId = sentences[0].id;
+  localStorage.setItem('shy-sentence-id', state.sentenceId);
   if (state.practiceMode === 'expressions') {
     if (!expressions.length) renderPracticeEmpty(list, '本节暂未识别到重点表达', '重点表达只会从当前视频的真实字幕中提取，不使用无关示例填充。');
     expressions.forEach((expression, index) => {
@@ -856,6 +868,7 @@ function selectChapter(chapterId) {
   state.chapterId = chapterId;
   state.sentenceId = '';
   localStorage.setItem('shy-chapter-id', chapterId);
+  localStorage.removeItem('shy-sentence-id');
   analytics.begin('chapters', `${state.topicId}:${chapterId}`, true);
   renderPracticeTopic();
 }
@@ -968,6 +981,7 @@ function bindPracticeLines() {
       $$('.lyric-line').forEach((item) => { item.classList.remove('active'); const icon = $('i', item); if (icon) icon.textContent = '▶'; });
       line.classList.add('active'); const icon = $('i', line); if (icon) icon.textContent = '🔊';
       state.sentenceId = line.dataset.sentenceId || '';
+      localStorage.setItem('shy-sentence-id', state.sentenceId);
       const key = `${state.topicId}:${state.chapterId}:${state.sentenceId}`;
       analytics.begin('sentences', key, true);
       loadYouTubePlayer(Number(line.dataset.start || 0), true);
@@ -992,6 +1006,7 @@ function setupCatalogControls() {
     state.chapterId = currentTopic()?.chapters?.[0]?.id || '';
     state.sentenceId = '';
     localStorage.setItem('shy-topic-id', state.topicId); localStorage.setItem('shy-chapter-id', state.chapterId);
+    localStorage.removeItem('shy-sentence-id');
     resetYouTubePlayer(); renderPracticeTopic();
     hydrateTopic(currentTopic());
     ensureTopicTitleTranslation(currentTopic());
@@ -1011,6 +1026,7 @@ function setupCatalogControls() {
       }
       state.topicId = id; state.chapterId = topic.chapters[0].id; state.sentenceId = '';
       localStorage.setItem('shy-topic-id', id); localStorage.setItem('shy-chapter-id', state.chapterId);
+      localStorage.removeItem('shy-sentence-id');
       resetYouTubePlayer(); renderPracticeTopic(); refreshYouTubeMetadata(topic); toast('视频主题已添加，并保存在当前设备。');
     } }],
   }));

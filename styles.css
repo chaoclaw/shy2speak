@@ -150,6 +150,9 @@ html[data-mode="dark"] .top-avatar.account-anonymous { background:#303644; color
 .secondary-btn { color:var(--text); background:var(--surface); border:1px solid var(--border); }
 .secondary-btn:hover { border-color:rgba(var(--primary-rgb),.35); color:var(--primary); }
 .primary-btn.full { width:100%; }
+#continuePracticeButton { max-width:min(100%,520px); display:inline-flex; align-items:center; gap:8px; min-width:0; }
+#continuePracticeLabel { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#continuePracticeButton > span:last-child { flex:0 0 auto; }
 .primary-btn.compact,.secondary-btn.compact { min-height:34px; padding:0 11px; font-size:11px; border-radius:9px; }
 .text-btn { border:0; padding:4px; background:transparent; color:var(--primary); font-size:12px; font-weight:600; }
 .pill { display:inline-flex; align-items:center; gap:5px; width:max-content; padding:5px 8px; border-radius:8px; background:var(--surface-soft); color:var(--text-soft); font-size:9px; font-weight:700; letter-spacing:.45px; }
