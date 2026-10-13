@@ -602,7 +602,7 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v38',
+    release: 'v39',
     database: 'postgresql',
     audio: { primaryResolver: 'yt-dlp', fallbackResolver: 'youtubei.js' },
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },

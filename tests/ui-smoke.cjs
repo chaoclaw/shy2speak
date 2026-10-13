@@ -221,12 +221,20 @@ async function main() {
   assert.equal(await page.locator('#authAccount').getAttribute('type'), 'tel', 'phone auth must use a separate tel input');
   assert.ok((await page.locator('#modalBody').textContent()).includes('真实账号服务已连接'), 'auth dialog must no longer be a demo flow');
   await page.click('[data-auth-method="email"]');
+  await page.focus('#authAccount');
   const authInputLayout = await page.evaluate(() => {
     const input = document.querySelector('#authAccount').getBoundingClientRect();
     const body = document.querySelector('#modalBody').getBoundingClientRect();
-    return { insideLeft: input.left >= body.left, insideRight: input.right <= body.right, width: input.width, bodyWidth: body.width };
+    return { leftClearance: input.left - body.left, rightClearance: body.right - input.right, width: input.width, bodyWidth: body.width, boxShadow: getComputedStyle(document.querySelector('#authAccount')).boxShadow };
   });
-  assert.ok(authInputLayout.insideLeft && authInputLayout.insideRight && authInputLayout.width <= authInputLayout.bodyWidth, 'auth inputs must remain inside the modal edges');
+  assert.ok(authInputLayout.leftClearance >= 5 && authInputLayout.rightClearance >= 5 && authInputLayout.width <= authInputLayout.bodyWidth, 'focused auth inputs need enough horizontal clearance for their outer focus ring');
+  assert.notEqual(authInputLayout.boxShadow, 'none', 'focused email input should render an unclipped outer focus ring');
+  await page.focus('#authPassword');
+  const passwordClearance = await page.evaluate(() => {
+    const input = document.querySelector('#authPassword').getBoundingClientRect(); const body = document.querySelector('#modalBody').getBoundingClientRect();
+    return { left: input.left - body.left, right: body.right - input.right, shadow: getComputedStyle(document.querySelector('#authPassword')).boxShadow };
+  });
+  assert.ok(passwordClearance.left >= 5 && passwordClearance.right >= 5 && passwordClearance.shadow !== 'none', 'password focus ring should remain visible on both sides');
   await page.fill('#authAccount', 'learner@example.com');
   await page.fill('#authPassword', 'correct-password');
   await page.locator('#modalActions .primary-btn').click();
