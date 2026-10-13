@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildTopicFromVideoDetails, chaptersFromDescription, fetchYouTubeTopic, segmentSubtitleRows } from '../server/youtube-catalog.js';
+import { buildTopicFromVideoDetails, chaptersFromDescription, extractKeyExpressions, fetchYouTubeTopic, segmentSubtitleRows } from '../server/youtube-catalog.js';
 
 const subtitles = [
   { start: '0.20', dur: '1.60', text: 'Hello and welcome' },
@@ -24,6 +24,14 @@ const translatedSentences = segmentSubtitleRows(subtitles, [
 assert.equal(translatedSentences[0].zh, '你好，欢迎来到本课。');
 assert.ok(translatedSentences.every((sentence) => sentence.zh), 'translated captions should align with every segmented English sentence');
 
+const expressions = extractKeyExpressions([
+  { id: 'sentence-real-1', start: 0, end: 4.7, en: 'Welcome back to my YouTube channel!', zh: '欢迎回到我的 YouTube 频道！' },
+  { id: 'sentence-real-2', start: 63.48, end: 68.76, en: "They're famous for their cheesecake and have a ton of restaurants.", zh: '他们以芝士蛋糕闻名，还有很多餐厅。' },
+]);
+assert.deepEqual(expressions.map((item) => item.phrase), ['welcome back to', 'be famous for', 'a ton of']);
+assert.equal(expressions[1].sentenceId, 'sentence-real-2');
+assert.equal(expressions[1].sourceEn, "They're famous for their cheesecake and have a ton of restaurants.");
+
 const chapterSeeds = chaptersFromDescription('0:00 Introduction\n0:10 Repeat after me', 12);
 assert.deepEqual(chapterSeeds, [{ start: 0, title: 'Introduction' }, { start: 10, title: 'Repeat after me' }]);
 
@@ -37,6 +45,8 @@ assert.equal(topic.transcriptOrigin, 'youtube-public-captions');
 assert.equal(topic.captionLanguage, 'en');
 assert.equal(topic.chapters.length, 2);
 assert.equal(topic.chapters.flatMap((chapter) => chapter.sentences).length, 3);
+assert.ok(Array.isArray(topic.chapters[0].keyExpressions), 'chapters should include caption-derived key expressions');
+assert.equal(topic.captionSchemaVersion, 6);
 
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input) => {

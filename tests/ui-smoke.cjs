@@ -21,7 +21,7 @@ catalogFixture.topics[0].chapters = [
   {
     id: 'chapter-01', index: 1, title: 'Verified captions', titleZh: '已验证字幕', start: 0, durationLabel: '0:08', previewWords: ['welcome'],
     sentences: [
-      { id: 'sentence-001', start: 0, end: 3.5, en: 'Welcome to this verified test lesson.', zh: '欢迎来到已验证的测试课程。', words: ['welcome'] },
+      { id: 'sentence-001', start: 0, end: 3.5, en: 'Welcome back to this verified test lesson.', zh: '欢迎回到已验证的测试课程。', words: ['welcome'] },
       { id: 'sentence-002', start: 3.5, end: 8, en: 'Repeat this sentence clearly.', zh: '请清晰地跟读这句话。', words: [] },
     ],
   },
@@ -113,6 +113,14 @@ async function main() {
   assert.ok((await page.locator('#topicSelect option').first().textContent()).includes('商场英语词汇'), 'topic picker should show English and the current-language title');
   assert.equal(await page.locator('.chapters-card .chapter').count(), 3, 'catalog chapters should render');
   assert.equal(await page.locator('#practiceLyrics .lyric-line').count(), 2, 'server-synced sentence lyrics should render');
+  assert.equal(await page.locator('#keyExpressionCount').textContent(), '1', 'key-expression count should come from the current real caption text');
+  await page.click('[data-practice-mode="expressions"]');
+  assert.equal(await page.locator('#practiceLyrics .expression-line').count(), 1, 'key expressions should render as a real caption-derived learning view');
+  assert.equal(await page.locator('#practiceLyrics .expression-line strong').textContent(), 'welcome back to');
+  assert.ok((await page.locator('#practiceLyrics .expression-line q').textContent()).includes('Welcome back to this verified test lesson.'));
+  await page.click('[data-practice-mode="transcript"]');
+  assert.equal(await page.locator('#practiceLyrics .transcript-line').count(), 2, 'full transcript should render every caption sentence');
+  await page.click('[data-practice-mode="sentences"]');
 
   await page.locator('.side-nav .nav-item').first().hover();
   await page.waitForSelector('#globalHoverToast.visible');

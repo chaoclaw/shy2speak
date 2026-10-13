@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=35"></script>
-    <link rel="stylesheet" href="./styles.css?v=35" />
+    <script src="./boot.js?v=36"></script>
+    <link rel="stylesheet" href="./styles.css?v=36" />
   </head>
   <body>
     <div class="app-shell">
@@ -153,7 +153,7 @@
 
                 <article class="lyrics-card">
                   <div class="lyrics-toolbar">
-                    <div class="segmented"><button class="active">逐句跟读</button><button>全文字幕</button><button>重点表达 <i>8</i></button></div>
+                    <div class="segmented" id="practiceModeTabs"><button class="active" data-practice-mode="sentences">逐句跟读</button><button data-practice-mode="transcript">全文字幕</button><button data-practice-mode="expressions">重点表达 <i id="keyExpressionCount">0</i></button></div>
                     <div class="toolbar-actions"><span class="status warning transcript-status" id="transcriptStatus">练习稿</span><button class="icon-btn" title="字幕语言">中/EN</button><button class="icon-btn">⋮</button></div>
                   </div>
                   <div class="lyrics-list" id="practiceLyrics">
@@ -332,9 +332,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=35"></script>
-    <script src="./i18n.js?v=35"></script>
-    <script src="./backend.js?v=35"></script>
-    <script src="./app.js?v=35"></script>
+    <script src="./runtime-config.js?v=36"></script>
+    <script src="./i18n.js?v=36"></script>
+    <script src="./backend.js?v=36"></script>
+    <script src="./app.js?v=36"></script>
   </body>
 </html>

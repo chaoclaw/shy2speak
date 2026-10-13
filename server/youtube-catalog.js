@@ -12,6 +12,52 @@ const STOP_WORDS = new Set([
   'will', 'with', 'would', 'you', 'your',
 ]);
 
+const KEY_EXPRESSION_LIBRARY = [
+  { id: 'welcome-back-to', pattern: /\bwelcome back to\b/i, phrase: 'welcome back to', meaningZh: '欢迎回到……', meaningEn: 'used to greet someone returning to a place, show, or channel' },
+  { id: 'take-with-me', pattern: /\btake (?:you|him|her|them|us)(?:\s+[a-z]+)? with me\b/i, phrase: 'take someone with me', meaningZh: '带某人和我一起去', meaningEn: 'bring someone along on an activity or trip' },
+  { id: 'go-shopping', pattern: /\bgo shopping\b/i, phrase: 'go shopping', meaningZh: '去购物', meaningEn: 'visit stores in order to buy things' },
+  { id: 'main-entrance', pattern: /\bmain entrance\b/i, phrase: 'main entrance', meaningZh: '正门；主入口', meaningEn: 'the principal way into a building or place' },
+  { id: 'cool-down', pattern: /\bcool (?:me|you|him|her|us|them|it) down\b/i, phrase: 'cool someone down', meaningZh: '使某人凉快下来', meaningEn: 'make someone feel less hot' },
+  { id: 'in-the-middle-of', pattern: /\bin the middle of\b/i, phrase: 'in the middle of', meaningZh: '正处于……之中', meaningEn: 'during or at the central part of something' },
+  { id: 'scorching-hot', pattern: /\bscorching hot\b/i, phrase: 'scorching hot', meaningZh: '酷热的；热得灼人', meaningEn: 'extremely hot' },
+  { id: 'to-my-left-right', pattern: /\bto my (?:left|right)\b/i, phrase: 'to my left / right', meaningZh: '在我的左边／右边', meaningEn: 'used to describe the position of something nearby' },
+  { id: 'be-famous-for', pattern: /\b(?:am|is|are|'m|'s|'re|was|were) famous for\b/i, phrase: 'be famous for', meaningZh: '以……闻名', meaningEn: 'be well known because of something' },
+  { id: 'a-ton-of', pattern: /\ba ton of\b/i, phrase: 'a ton of', meaningZh: '大量；许多', meaningEn: 'an informal way to say a very large amount or number' },
+  { id: 'food-court', pattern: /\bfood court\b/i, phrase: 'food court', meaningZh: '美食广场', meaningEn: 'an area in a mall where several food vendors share seating' },
+  { id: 'continue-on-with', pattern: /\bcontinue on with\b/i, phrase: 'continue on with', meaningZh: '继续进行……', meaningEn: 'keep doing or discussing something' },
+  { id: 'right-behind-me', pattern: /\bright behind me\b/i, phrase: 'right behind me', meaningZh: '就在我身后', meaningEn: 'directly behind the speaker' },
+  { id: 'choose-to', pattern: /\bchoose to\b/i, phrase: 'choose to', meaningZh: '选择做……', meaningEn: 'decide to do something' },
+  { id: 'try-on', pattern: /\btry on\b/i, phrase: 'try on', meaningZh: '试穿', meaningEn: 'put on clothing to see whether it fits or looks good' },
+  { id: 'check-out', pattern: /\bcheck out\b/i, phrase: 'check out', meaningZh: '看看；仔细了解', meaningEn: 'look at or examine something interesting' },
+  { id: 'look-for', pattern: /\blook(?:ing)? for\b/i, phrase: 'look for', meaningZh: '寻找', meaningEn: 'try to find someone or something' },
+  { id: 'pay-for', pattern: /\bpay(?:ing)? for\b/i, phrase: 'pay for', meaningZh: '为……付款', meaningEn: 'give money in exchange for something' },
+  { id: 'instead-of', pattern: /\binstead of\b/i, phrase: 'instead of', meaningZh: '代替；而不是', meaningEn: 'in place of someone or something else' },
+  { id: 'make-sure', pattern: /\bmake sure\b/i, phrase: 'make sure', meaningZh: '确保；确认', meaningEn: 'check or act so that something is certain' },
+];
+
+export function extractKeyExpressions(sentences = [], limit = 12) {
+  const matches = [];
+  const seen = new Set();
+  for (const sentence of sentences) {
+    for (const definition of KEY_EXPRESSION_LIBRARY) {
+      if (seen.has(definition.id) || !definition.pattern.test(sentence.en || '')) continue;
+      seen.add(definition.id);
+      matches.push({
+        id: `expression-${definition.id}`,
+        phrase: definition.phrase,
+        meaningZh: definition.meaningZh,
+        meaningEn: definition.meaningEn,
+        sentenceId: sentence.id,
+        start: sentence.start,
+        end: sentence.end,
+        sourceEn: sentence.en,
+        sourceZh: sentence.zh || '',
+      });
+    }
+  }
+  return matches.sort((left, right) => left.start - right.start).slice(0, limit);
+}
+
 function decodeCaptionEntities(value) {
   return String(value || '')
     .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number(code)))
@@ -159,6 +205,7 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
       durationSeconds: Number(Math.max(0, nextStart - seed.start).toFixed(3)),
       durationLabel: formatDuration(nextStart - seed.start),
       previewWords: previewWords(items),
+      keyExpressions: extractKeyExpressions(items),
       sentences: items,
     };
   });
@@ -172,7 +219,7 @@ export function buildTopicFromVideoDetails(topic, details, syncedAt = new Date()
         ? 'youtube-auto-captions'
         : 'youtube-public-captions',
     captionLanguage: details.captionLanguage || 'en',
-    captionSchemaVersion: 5,
+    captionSchemaVersion: 6,
     captionTranslationLanguage: details.translationLanguage || '',
     captionTranslationSourceLanguage: details.translationSourceLanguage || '',
     translatedSentenceCount: sentences.filter((sentence) => sentence.zh).length,

@@ -21,6 +21,7 @@ const state = {
   topicId: localStorage.getItem('shy-topic-id') || '',
   chapterId: localStorage.getItem('shy-chapter-id') || '',
   sentenceId: '',
+  practiceMode: 'sentences',
   mediaRecorder: null,
   mediaStream: null,
   recordingStartedAt: 0,
@@ -734,32 +735,90 @@ function appendHighlightedText(target, sentence, words = []) {
   });
 }
 
+const CLIENT_KEY_EXPRESSIONS = [
+  ['welcome-back-to', /\bwelcome back to\b/i, 'welcome back to', '欢迎回到……', 'used to greet someone returning to a place, show, or channel'],
+  ['take-with-me', /\btake (?:you|him|her|them|us)(?:\s+[a-z]+)? with me\b/i, 'take someone with me', '带某人和我一起去', 'bring someone along on an activity or trip'],
+  ['go-shopping', /\bgo shopping\b/i, 'go shopping', '去购物', 'visit stores in order to buy things'],
+  ['main-entrance', /\bmain entrance\b/i, 'main entrance', '正门；主入口', 'the principal way into a building or place'],
+  ['cool-down', /\bcool (?:me|you|him|her|us|them|it) down\b/i, 'cool someone down', '使某人凉快下来', 'make someone feel less hot'],
+  ['in-the-middle-of', /\bin the middle of\b/i, 'in the middle of', '正处于……之中', 'during or at the central part of something'],
+  ['scorching-hot', /\bscorching hot\b/i, 'scorching hot', '酷热的；热得灼人', 'extremely hot'],
+  ['to-my-left-right', /\bto my (?:left|right)\b/i, 'to my left / right', '在我的左边／右边', 'used to describe the position of something nearby'],
+  ['be-famous-for', /\b(?:am|is|are|'m|'s|'re|was|were) famous for\b/i, 'be famous for', '以……闻名', 'be well known because of something'],
+  ['a-ton-of', /\ba ton of\b/i, 'a ton of', '大量；许多', 'an informal way to say a very large amount or number'],
+  ['food-court', /\bfood court\b/i, 'food court', '美食广场', 'an area in a mall where several food vendors share seating'],
+  ['continue-on-with', /\bcontinue on with\b/i, 'continue on with', '继续进行……', 'keep doing or discussing something'],
+  ['right-behind-me', /\bright behind me\b/i, 'right behind me', '就在我身后', 'directly behind the speaker'],
+  ['choose-to', /\bchoose to\b/i, 'choose to', '选择做……', 'decide to do something'],
+  ['try-on', /\btry on\b/i, 'try on', '试穿', 'put on clothing to see whether it fits or looks good'],
+  ['check-out', /\bcheck out\b/i, 'check out', '看看；仔细了解', 'look at or examine something interesting'],
+];
+
+function keyExpressionsForChapter(chapter) {
+  if (chapter?.keyExpressions?.length) return chapter.keyExpressions;
+  const expressions = []; const seen = new Set();
+  for (const sentence of chapter?.sentences || []) {
+    for (const [id, pattern, phrase, meaningZh, meaningEn] of CLIENT_KEY_EXPRESSIONS) {
+      if (seen.has(id) || !pattern.test(sentence.en || '')) continue;
+      seen.add(id);
+      expressions.push({ id: `expression-${id}`, phrase, meaningZh, meaningEn, sentenceId: sentence.id, start: sentence.start, end: sentence.end, sourceEn: sentence.en, sourceZh: sentence.zh || '' });
+    }
+  }
+  return expressions.sort((left, right) => left.start - right.start).slice(0, 12);
+}
+
+function renderPracticeEmpty(list, title, detail) {
+  const empty = document.createElement('div'); empty.className = 'lyrics-empty';
+  const icon = document.createElement('span'); icon.textContent = 'CC';
+  const heading = document.createElement('strong'); heading.textContent = title;
+  const copyNode = document.createElement('small'); copyNode.textContent = detail;
+  empty.append(icon, heading, copyNode); list.append(empty);
+}
+
+function buildPracticeLine(sentence, index, { transcript = false } = {}) {
+  const button = document.createElement('button');
+  button.className = `lyric-line${transcript ? ' transcript-line' : ''}${sentence.id === state.sentenceId ? ' active' : ''}`;
+  button.dataset.sentenceId = sentence.id; button.dataset.start = sentence.start;
+  const number = document.createElement('em'); number.textContent = transcript ? formatDuration(sentence.start) : index + 1;
+  const content = document.createElement('span');
+  const english = document.createElement('strong'); appendHighlightedText(english, sentence.en, sentence.words);
+  const translation = document.createElement('small'); translation.textContent = sentence.zh;
+  const play = document.createElement('i'); play.textContent = sentence.id === state.sentenceId ? '🔊' : '▶';
+  content.append(english, translation); button.append(number, content, play);
+  return button;
+}
+
 function renderPracticeSentences(chapter) {
   const list = $('#practiceLyrics');
   list.replaceChildren();
   const sentences = chapter?.sentences || [];
+  const expressions = keyExpressionsForChapter(chapter);
+  $('#keyExpressionCount').textContent = expressions.length;
+  $$('[data-practice-mode]', $('#practiceModeTabs')).forEach((button) => button.classList.toggle('active', button.dataset.practiceMode === state.practiceMode));
   if (!sentences.length) {
-    const empty = document.createElement('div');
-    empty.className = 'lyrics-empty';
-    empty.innerHTML = '<span>CC</span><strong>字幕与逐句练习尚未同步</strong><small>视频可以正常播放。导入授权字幕或连接转写服务后即可生成逐句练习。</small>';
-    list.append(empty);
+    renderPracticeEmpty(list, '字幕与逐句练习尚未同步', '视频可以正常播放。导入授权字幕或连接转写服务后即可生成逐句练习。');
     state.sentenceId = '';
     renderStoredPracticeResults();
     return;
   }
   if (!sentences.some((sentence) => sentence.id === state.sentenceId)) state.sentenceId = sentences[0].id;
-  sentences.forEach((sentence, index) => {
-    const button = document.createElement('button');
-    button.className = `lyric-line${sentence.id === state.sentenceId ? ' active' : ''}`;
-    button.dataset.sentenceId = sentence.id;
-    button.dataset.start = sentence.start;
-    const number = document.createElement('em'); number.textContent = index + 1;
-    const content = document.createElement('span');
-    const english = document.createElement('strong'); appendHighlightedText(english, sentence.en, sentence.words);
-    const translation = document.createElement('small'); translation.textContent = sentence.zh;
-    const play = document.createElement('i'); play.textContent = sentence.id === state.sentenceId ? '🔊' : '▶';
-    content.append(english, translation); button.append(number, content, play); list.append(button);
-  });
+  if (state.practiceMode === 'expressions') {
+    if (!expressions.length) renderPracticeEmpty(list, '本节暂未识别到重点表达', '重点表达只会从当前视频的真实字幕中提取，不使用无关示例填充。');
+    expressions.forEach((expression, index) => {
+      const button = document.createElement('button'); button.className = `lyric-line expression-line${expression.sentenceId === state.sentenceId ? ' active' : ''}`;
+      button.dataset.sentenceId = expression.sentenceId; button.dataset.start = expression.start;
+      const number = document.createElement('em'); number.textContent = String(index + 1).padStart(2, '0');
+      const content = document.createElement('span');
+      const phrase = document.createElement('strong'); phrase.textContent = expression.phrase;
+      const meaning = document.createElement('small'); meaning.className = 'expression-meaning'; meaning.textContent = state.language === 'en' ? expression.meaningEn : expression.meaningZh;
+      const source = document.createElement('q'); source.textContent = expression.sourceEn;
+      const meta = document.createElement('small'); meta.className = 'expression-source'; meta.textContent = `${formatDuration(expression.start)} · ${state.language === 'en' ? 'From this video’s captions' : '来自本视频真实字幕'}`;
+      const play = document.createElement('i'); play.textContent = expression.sentenceId === state.sentenceId ? '🔊' : '▶';
+      content.append(phrase, meaning, source, meta); button.append(number, content, play); list.append(button);
+    });
+  } else {
+    sentences.forEach((sentence, index) => list.append(buildPracticeLine(sentence, index, { transcript: state.practiceMode === 'transcript' })));
+  }
   bindPracticeLines();
   renderStoredPracticeResults();
 }
@@ -921,6 +980,12 @@ function bindPracticeLines() {
 }
 
 function setupCatalogControls() {
+  $('#practiceModeTabs').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-practice-mode]');
+    if (!button) return;
+    state.practiceMode = button.dataset.practiceMode;
+    renderPracticeSentences(currentChapter());
+  });
   $('#topicSelect').addEventListener('change', (event) => {
     analytics.end('topics'); analytics.end('chapters'); analytics.end('sentences');
     state.topicId = event.target.value;
@@ -1152,7 +1217,7 @@ function setupGlobalControls() {
     toast(state.language === 'zh' ? '界面语言已切换为简体中文。' : 'Interface language changed to English.');
   });
   $$('.segmented').forEach((group) => {
-    if (group.id === 'lyricsLanguage') return;
+    if (group.id === 'lyricsLanguage' || group.id === 'practiceModeTabs') return;
     $$('button', group).forEach((button) => button.addEventListener('click', () => {
       $$('button', group).forEach((item) => item.classList.remove('active'));
       button.classList.add('active');
