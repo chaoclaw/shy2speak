@@ -335,7 +335,20 @@ async function main() {
   assert.ok((await page.locator('[data-provider="primary"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
   await page.locator('[data-provider="primary"] .test-model').click();
   assert.ok((await page.locator('#modalTitle').textContent()).includes('统一 AI'), 'real unified provider configuration dialog should open');
+  await page.fill('#providerBaseUrl', '');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => document.querySelector('#toastContainer')?.textContent.includes('API 地址'));
+  assert.equal(await page.locator('#appModal').evaluate((dialog) => dialog.open), true, 'validation feedback should keep the dialog open');
+  assert.equal(await page.locator('#toastContainer').evaluate((node) => node.parentElement?.id), 'appModal', 'toast feedback triggered by a dialog must render inside the browser top layer');
+  const modalToastVisible = await page.evaluate(() => {
+    const toast = document.querySelector('#toastContainer .toast');
+    const rect = toast.getBoundingClientRect();
+    const topmost = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return rect.width > 0 && rect.height > 0 && (toast === topmost || toast.contains(topmost));
+  });
+  assert.equal(modalToastVisible, true, 'dialog toast must be visible and above the modal surface and backdrop');
   await page.locator('#appModal').evaluate((dialog) => dialog.close());
+  await page.waitForFunction(() => document.querySelector('#toastContainer')?.parentElement === document.body);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.navigate('practice'));

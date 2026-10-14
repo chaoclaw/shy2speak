@@ -753,7 +753,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=41', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=42', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1234,9 +1234,17 @@ function toast(message, actionText, action) {
   const copy = document.createElement('p'); copy.textContent = String(message || '操作完成');
   node.append(icon, copy);
   if (actionText) { const button = document.createElement('button'); button.textContent = actionText; node.append(button); }
-  $('#toastContainer').append(node);
+  syncToastHost().append(node);
   if (actionText) $('button', node).addEventListener('click', () => { action?.(); removeToast(node); });
   setTimeout(() => removeToast(node), 4600);
+}
+
+function syncToastHost() {
+  const container = $('#toastContainer');
+  const modal = $('#appModal');
+  const host = modal?.open ? modal : document.body;
+  if (container?.parentElement !== host) host.append(container);
+  return container;
 }
 
 function removeToast(node) {
@@ -1271,6 +1279,7 @@ function showModal({ eyebrow = 'NOTICE', title, body, actions = [] }) {
     footer.append(button);
   });
   if (!modal.open) modal.showModal();
+  syncToastHost();
 }
 
 function sharePage() {
@@ -1301,6 +1310,7 @@ function setupNavigation() {
 }
 
 function setupGlobalControls() {
+  $('#appModal').addEventListener('close', syncToastHost);
   $('#modeToggle').addEventListener('click', () => {
     state.mode = document.documentElement.dataset.mode === 'dark' ? 'light' : 'dark';
     localStorage.setItem('shy-mode', state.mode);
@@ -1649,7 +1659,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=41', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=42', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
