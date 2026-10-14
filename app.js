@@ -659,19 +659,19 @@ function topicCatalogIndex(topic) {
 async function ensureTopicTitleTranslation(topic) {
   if (!topic?.videoId || state.language === 'en' || localizedTopicTitle(topic)) return;
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
-  const provider = providers.primary || providers.openai;
-  const apiKey = sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
-  if (!provider?.lastTestOk || !provider?.model || !apiKey) return;
+  const provider = primaryProviderConfig(providers.primary || providers.openai);
+  const apiKey = sessionStorage.getItem('shy-ai-key-text') || sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
+  if (!provider?.lastTestOk || !provider?.textModel || !apiKey) return;
   const key = `${topic.videoId}:${state.language}`;
   if (topicTranslationPromises.has(key)) return topicTranslationPromises.get(key);
   const promise = (async () => {
     try {
       const languageNames = { zh: '简体中文' };
-      const response = await fetch(providerEndpoint(provider.baseUrl, 'chat/completions'), {
+      const response = await fetch(providerEndpoint(provider.textBaseUrl, 'chat/completions'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: provider.model,
+          model: provider.textModel,
           messages: [{ role: 'user', content: `Translate this English learning-video title into ${languageNames[state.language] || state.language}. Return only the translated title, with no quotes or explanation:\n${topic.title}` }],
           temperature: 0,
         }),
@@ -753,7 +753,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=42', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=43', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1659,7 +1659,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=42', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=43', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -2205,6 +2205,17 @@ function providerEndpoint(baseUrl, path) {
   return base.href;
 }
 
+function primaryProviderConfig(provider) {
+  if (!provider) return null;
+  return {
+    ...provider,
+    textBaseUrl: provider.textBaseUrl || provider.baseUrl || '',
+    textModel: provider.textModel || provider.model || '',
+    speechBaseUrl: provider.speechBaseUrl || '',
+    speechModel: provider.speechModel || '',
+  };
+}
+
 function readAudioMetadata(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file); const audio = new Audio();
@@ -2232,15 +2243,17 @@ async function acceptAudioFile(file) {
 }
 
 async function generateSlidesWithAI(file) {
-  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = providers.primary || providers.openai; const apiKey = sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
-  if (!provider?.lastTestOk || !apiKey) throw new Error('请先在 AI 服务中完成真实连接测试；API Key 只保存在当前标签页。');
-  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.model);
-  const transcriptionResponse = await fetch(providerEndpoint(provider.baseUrl, 'audio/transcriptions'), { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: transcriptionBody });
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = primaryProviderConfig(providers.primary || providers.openai);
+  const textKey = sessionStorage.getItem('shy-ai-key-text') || sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
+  const speechKey = sessionStorage.getItem('shy-ai-key-speech-channel');
+  if (!provider?.lastTestOk || !textKey || !speechKey) throw new Error('请先在 AI 服务中完成文本与语音通道测试；API Key 只保存在当前标签页。');
+  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.speechModel);
+  const transcriptionResponse = await fetch(providerEndpoint(provider.speechBaseUrl, 'audio/transcriptions'), { method: 'POST', headers: { Authorization: `Bearer ${speechKey}` }, body: transcriptionBody });
   if (!transcriptionResponse.ok) throw new Error(`音频转写失败：HTTP ${transcriptionResponse.status}`);
   const transcription = await transcriptionResponse.json(); const transcript = transcription.text || '';
   if (!transcript) throw new Error('转写服务没有返回文本。');
   const prompt = `请把下面的英语音频转写整理为 6-10 页口语学习 HTML PPT 大纲。仅返回 JSON：{"slides":[{"title":"","body":"","keywords":[""]}]}。转写：${transcript.slice(0, 12000)}`;
-  const completionResponse = await fetch(providerEndpoint(provider.baseUrl, 'chat/completions'), { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: provider.model, messages: [{ role: 'user', content: prompt }], temperature: .3 }) });
+  const completionResponse = await fetch(providerEndpoint(provider.textBaseUrl, 'chat/completions'), { method: 'POST', headers: { Authorization: `Bearer ${textKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: provider.textModel, messages: [{ role: 'user', content: prompt }], temperature: .3 }) });
   if (!completionResponse.ok) throw new Error(`课件生成失败：HTTP ${completionResponse.status}`);
   const completion = await completionResponse.json(); const content = completion.choices?.[0]?.message?.content || '';
   const parsed = JSON.parse(content.replace(/^```(?:json)?\s*|\s*```$/g, '')); if (!parsed.slides?.length) throw new Error('模型返回的课件结构无效。');
@@ -2290,7 +2303,7 @@ function setupStudio() {
 
 function updateProviderCards() {
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
-  const provider = providers.primary || providers.openai;
+  const provider = primaryProviderConfig(providers.primary || providers.openai);
   const card = $('.provider-card[data-provider="primary"]');
   const status = $('.provider-status', card);
   if (!provider) {
@@ -2299,12 +2312,12 @@ function updateProviderCards() {
     $$('.capability-status').forEach((node) => { node.textContent = '待验证'; node.className = 'capability-status'; });
     return;
   }
-  const complete = provider.lastTestOk && provider.speechDetected && provider.translationDetected && provider.htmlPptDetected;
+  const complete = provider.lastTestOk && provider.textBaseUrl && provider.textModel && provider.speechBaseUrl && provider.speechModel && provider.speechDetected && provider.translationDetected && provider.htmlPptDetected;
   status.textContent = complete ? '● 三项能力已验证' : '● 已保存 · 待完整验证';
   status.className = `status ${complete ? 'success' : 'warning'} provider-status`;
-  $('#primaryProviderName').textContent = provider.name || '统一 OpenAI-compatible 服务';
-  $('#primaryProviderMeta').textContent = `${provider.model || '未选择模型'} · 语音 · 翻译 · HTML PPT`;
-  $$('.active-model-name').forEach((node) => { node.textContent = provider.model || '尚未配置'; });
+  $('#primaryProviderName').textContent = provider.name || '统一 AI 服务';
+  $('#primaryProviderMeta').textContent = `文本：${provider.textModel || '未配置'} · 语音：${provider.speechModel || '未配置'}`;
+  $$('.active-model-name').forEach((node) => { node.textContent = node.dataset.modelRole === 'speech' ? (provider.speechModel || '尚未配置') : (provider.textModel || '尚未配置'); });
   $$('.capability-status').forEach((node) => {
     const verified = Boolean(provider[`${node.dataset.capability}Detected`]);
     node.textContent = verified ? '✓ 已实测' : '待验证'; node.className = `capability-status${verified ? ' yes' : ''}`;
@@ -2318,38 +2331,52 @@ function silentWavBlob() {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-async function testProviderConnection(config, apiKey) {
-  let endpoint;
+function validatedProviderBaseUrl(value, label) {
   try {
-    const base = new URL(config.baseUrl);
-    if (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error('API 地址必须使用 HTTPS。');
-    endpoint = providerEndpoint(base.href, 'models');
-  } catch (error) { throw new Error(error.message || 'API 地址无效。'); }
-  if (!config.model) throw new Error('请填写需要同时承担三项能力的模型 ID。');
-  if (!apiKey) throw new Error('请填写 API Key；密钥只保存在当前标签页。');
+    const base = new URL(value);
+    if (base.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error(`${label}必须使用 HTTPS。`);
+    return base.href;
+  } catch (error) { throw new Error(error.message || `${label}无效。`); }
+}
+
+async function testProviderConnection(config, keys) {
+  const textBaseUrl = validatedProviderBaseUrl(config.textBaseUrl, '文本 API 地址');
+  const speechBaseUrl = validatedProviderBaseUrl(config.speechBaseUrl, '语音 API 地址');
+  if (!config.textModel) throw new Error('请填写文本模型 ID。');
+  if (!config.speechModel) throw new Error('请填写语音转写模型 ID。');
+  if (!keys.text) throw new Error('请填写文本服务 API Key；密钥只保存在当前标签页。');
+  if (!keys.speech) throw new Error('请填写语音服务 API Key；密钥只保存在当前标签页。');
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
   try {
-    const headers = { Authorization: `Bearer ${apiKey}` };
-    const response = await fetch(endpoint, { headers, signal: controller.signal });
-    const text = await response.text();
-    if (!response.ok) throw new Error(`连接失败：HTTP ${response.status}${text ? ` · ${text.slice(0, 90)}` : ''}`);
-    let payload = null;
-    try { payload = JSON.parse(text); } catch { throw new Error('模型列表没有返回有效 JSON。'); }
-    const modelIds = Array.isArray(payload?.data) ? payload.data.map((model) => model.id || '') : [];
-    if (modelIds.length && !modelIds.includes(config.model)) throw new Error(`模型列表中没有找到 “${config.model}”。`);
-    const contentResponse = await fetch(providerEndpoint(config.baseUrl, 'chat/completions'), {
-      method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, signal: controller.signal,
-      body: JSON.stringify({ model: config.model, temperature: 0, messages: [{ role: 'user', content: 'Translate "shopping mall" into Simplified Chinese and create one valid HTML slide. Return only JSON: {"translation":"...","html":"<section>...</section>"}.' }] }),
+    const textHeaders = { Authorization: `Bearer ${keys.text}` };
+    const textModelsResponse = await fetch(providerEndpoint(textBaseUrl, 'models'), { headers: textHeaders, signal: controller.signal });
+    const textModelsBody = await textModelsResponse.text();
+    if (!textModelsResponse.ok) throw new Error(`文本服务连接失败：HTTP ${textModelsResponse.status}${textModelsBody ? ` · ${textModelsBody.slice(0, 90)}` : ''}`);
+    let textModelsPayload = null;
+    try { textModelsPayload = JSON.parse(textModelsBody); } catch { throw new Error('文本服务模型列表没有返回有效 JSON。'); }
+    const textModelIds = Array.isArray(textModelsPayload?.data) ? textModelsPayload.data.map((model) => model.id || '') : [];
+    if (textModelIds.length && !textModelIds.includes(config.textModel)) throw new Error(`文本服务模型列表中没有找到 “${config.textModel}”。`);
+    const contentResponse = await fetch(providerEndpoint(textBaseUrl, 'chat/completions'), {
+      method: 'POST', headers: { ...textHeaders, 'Content-Type': 'application/json' }, signal: controller.signal,
+      body: JSON.stringify({ model: config.textModel, temperature: 0, messages: [{ role: 'user', content: 'Translate "shopping mall" into Simplified Chinese and create one valid HTML slide. Return only JSON: {"translation":"...","html":"<section>...</section>"}.' }] }),
     });
     if (!contentResponse.ok) throw new Error(`翻译与 HTML PPT 能力验证失败：HTTP ${contentResponse.status}`);
     const contentPayload = await contentResponse.json(); const content = String(contentPayload?.choices?.[0]?.message?.content || '');
     const translationDetected = /[\u3400-\u9fff]/.test(content); const htmlPptDetected = /<section[\s>]/i.test(content);
     if (!translationDetected || !htmlPptDetected) throw new Error('模型已响应，但没有同时返回中文翻译和有效 HTML slide。');
-    const audioBody = new FormData(); audioBody.append('file', silentWavBlob(), 'capability-check.wav'); audioBody.append('model', config.model);
-    const audioResponse = await fetch(providerEndpoint(config.baseUrl, 'audio/transcriptions'), { method: 'POST', headers, body: audioBody, signal: controller.signal });
-    if (!audioResponse.ok) throw new Error(`同一模型的语音能力验证失败：HTTP ${audioResponse.status}`);
-    return { speechDetected: true, translationDetected, htmlPptDetected, modelCount: modelIds.length };
+    const speechHeaders = { Authorization: `Bearer ${keys.speech}` };
+    const speechModelsResponse = await fetch(providerEndpoint(speechBaseUrl, 'models'), { headers: speechHeaders, signal: controller.signal });
+    const speechModelsBody = await speechModelsResponse.text();
+    if (!speechModelsResponse.ok) throw new Error(`语音服务连接失败：HTTP ${speechModelsResponse.status}${speechModelsBody ? ` · ${speechModelsBody.slice(0, 90)}` : ''}`);
+    let speechModelsPayload = null;
+    try { speechModelsPayload = JSON.parse(speechModelsBody); } catch { throw new Error('语音服务模型列表没有返回有效 JSON。'); }
+    const speechModelIds = Array.isArray(speechModelsPayload?.data) ? speechModelsPayload.data.map((model) => model.id || '') : [];
+    if (speechModelIds.length && !speechModelIds.includes(config.speechModel)) throw new Error(`语音服务模型列表中没有找到 “${config.speechModel}”。`);
+    const audioBody = new FormData(); audioBody.append('file', silentWavBlob(), 'capability-check.wav'); audioBody.append('model', config.speechModel);
+    const audioResponse = await fetch(providerEndpoint(speechBaseUrl, 'audio/transcriptions'), { method: 'POST', headers: speechHeaders, body: audioBody, signal: controller.signal });
+    if (!audioResponse.ok) throw new Error(`语音服务不支持 audio/transcriptions：HTTP ${audioResponse.status}。请改用支持 Whisper/OpenAI-compatible 转写的服务。`);
+    return { speechDetected: true, translationDetected, htmlPptDetected, textModelCount: textModelIds.length, speechModelCount: speechModelIds.length };
   } catch (error) {
     if (error.name === 'AbortError') throw new Error('连接超时，请检查 API 地址、网络或跨域配置。');
     throw error;
@@ -2358,21 +2385,23 @@ async function testProviderConnection(config, apiKey) {
 
 function openProviderModal() {
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
-  const stored = providers.primary || providers.openai || {};
+  const stored = primaryProviderConfig(providers.primary || providers.openai) || {};
   showModal({
     eyebrow: 'UNIFIED AI CONNECTION', title: '配置统一 AI 服务',
-    body: `<div class="modal-field"><label for="providerName">配置名称</label><input id="providerName" value="${escapeHTML(stored.name || '统一 AI 服务')}"></div><div class="modal-field"><label for="providerBaseUrl">OpenAI-compatible API Base URL</label><input id="providerBaseUrl" inputmode="url" value="${escapeHTML(stored.baseUrl || 'https://api.example.com/v1/')}"></div><div class="modal-field"><label for="providerModel">统一模型 ID</label><input id="providerModel" value="${escapeHTML(stored.model || '')}" placeholder="必须同时支持 chat 与 audio/transcriptions"></div><div class="modal-field"><label for="providerApiKey">API Key（仅保存在当前标签页）</label><input id="providerApiKey" type="password" autocomplete="off" placeholder="不会写入本地持久存储"></div><div class="capability-checklist"><span>必须全部通过</span><strong>语音输入</strong><strong>内容翻译</strong><strong>HTML PPT</strong></div><div class="warning-box"><span>🔒</span><p><strong>将执行三次真实能力检查</strong><br><small>读取模型列表、生成中文翻译与 HTML slide，并向语音转写接口提交短静音 WAV。浏览器直连需要厂商允许 CORS。</small></p></div>`,
+    body: `<div class="modal-field"><label for="providerName">配置名称</label><input id="providerName" value="${escapeHTML(stored.name || '统一 AI 服务')}"></div><section class="provider-channel"><div><span>TEXT</span><strong>文本、翻译与 HTML/PPT</strong></div><div class="modal-field"><label for="providerTextBaseUrl">文本 API Base URL</label><input id="providerTextBaseUrl" inputmode="url" value="${escapeHTML(stored.textBaseUrl || 'https://api.deepseek.com/')}"></div><div class="modal-field"><label for="providerTextModel">文本模型 ID</label><input id="providerTextModel" value="${escapeHTML(stored.textModel || '')}" placeholder="例如 deepseek-chat"></div><div class="modal-field"><label for="providerTextApiKey">文本服务 API Key（仅当前标签页）</label><input id="providerTextApiKey" type="password" autocomplete="off"></div></section><section class="provider-channel"><div><span>SPEECH</span><strong>语音转写与音频输入</strong></div><div class="modal-field"><label for="providerSpeechBaseUrl">语音 API Base URL</label><input id="providerSpeechBaseUrl" inputmode="url" value="${escapeHTML(stored.speechBaseUrl || 'https://api.openai.com/v1/')}"></div><div class="modal-field"><label for="providerSpeechModel">语音转写模型 ID</label><input id="providerSpeechModel" value="${escapeHTML(stored.speechModel || '')}" placeholder="例如 whisper-1"></div><div class="modal-field"><label for="providerSpeechApiKey">语音服务 API Key（仅当前标签页）</label><input id="providerSpeechApiKey" type="password" autocomplete="off"></div></section><div class="capability-checklist"><span>统一验证</span><strong>语音输入</strong><strong>内容翻译</strong><strong>HTML PPT</strong></div><div class="warning-box"><span>🔒</span><p><strong>密钥不会写入持久存储</strong><br><small>文本与语音可使用不同厂商。将分别读取模型列表、测试翻译与 HTML slide，并提交短静音 WAV 验证转写接口。</small></p></div>`,
     actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
-      const config = { name: $('#providerName').value.trim(), baseUrl: $('#providerBaseUrl').value.trim(), model: $('#providerModel').value.trim(), updatedAt: new Date().toISOString() };
-      const apiKey = $('#providerApiKey').value.trim();
-      if (!config.baseUrl) { toast('请填写 API 地址。'); return false; }
-      const result = await testProviderConnection(config, apiKey);
+      const config = { name: $('#providerName').value.trim(), textBaseUrl: $('#providerTextBaseUrl').value.trim(), textModel: $('#providerTextModel').value.trim(), speechBaseUrl: $('#providerSpeechBaseUrl').value.trim(), speechModel: $('#providerSpeechModel').value.trim(), updatedAt: new Date().toISOString() };
+      const keys = { text: $('#providerTextApiKey').value.trim(), speech: $('#providerSpeechApiKey').value.trim() };
+      if (!config.textBaseUrl) { toast('请填写文本 API 地址。'); return false; }
+      if (!config.speechBaseUrl) { toast('请填写语音 API 地址。'); return false; }
+      const result = await testProviderConnection(config, keys);
       providers.primary = { ...config, ...result, lastTestOk: true, lastTestedAt: new Date().toISOString() };
-      delete providers.openai; delete providers.speech;
+      delete providers.openai;
       writeStoredJSON(STORAGE_KEYS.providers, providers);
-      sessionStorage.setItem('shy-ai-key-primary', apiKey);
+      sessionStorage.setItem('shy-ai-key-text', keys.text);
+      sessionStorage.setItem('shy-ai-key-speech-channel', keys.speech);
       updateProviderCards();
-      toast(`统一模型三项能力验证通过${result.modelCount ? ` · 服务共返回 ${result.modelCount} 个模型` : ''}。`);
+      toast('文本、语音两条通道及三项能力已验证通过。');
     } }],
   });
 }

@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=42"></script>
-    <link rel="stylesheet" href="./styles.css?v=42" />
+    <script src="./boot.js?v=43"></script>
+    <link rel="stylesheet" href="./styles.css?v=43" />
   </head>
   <body>
     <div class="app-shell">
@@ -279,11 +279,11 @@
 
           <!-- AI -->
           <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
-            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>一套 API 配置、一个模型 ID，同时验证语音、内容翻译和 HTML PPT 生成能力。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
-            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 OpenAI-compatible 服务</h3><p id="primaryProviderMeta">同一模型：语音 · 翻译 · HTML PPT</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
+            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>一套配置管理文本与语音两条通道，可分别选择厂商和模型。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
+            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">文本模型 + 语音模型</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
 
             <div class="ai-layout">
-              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一模型能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>语音识别与发音输入</strong><span class="active-model-name">尚未配置</span><span class="capability-status" data-capability="speech">待验证</span></div><div><strong>内容翻译</strong><span class="active-model-name">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
+              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一配置能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>语音识别与发音输入</strong><span class="active-model-name" data-model-role="speech">尚未配置</span><span class="capability-status" data-capability="speech">待验证</span></div><div><strong>内容翻译</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
 
               <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs" id="promptTabs"></div><label class="editor-label">System Prompt<textarea id="promptEditor"></textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{word_scores}}</span><span>{{learner_level}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small id="promptVersion">本机模板 · 未修改</small></div><div class="button-row"><button class="text-btn" id="deletePrompt">删除</button><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
             </div>
@@ -326,9 +326,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=42"></script>
-    <script src="./i18n.js?v=42"></script>
-    <script src="./backend.js?v=42"></script>
-    <script src="./app.js?v=42"></script>
+    <script src="./runtime-config.js?v=43"></script>
+    <script src="./i18n.js?v=43"></script>
+    <script src="./backend.js?v=43"></script>
+    <script src="./app.js?v=43"></script>
   </body>
 </html>

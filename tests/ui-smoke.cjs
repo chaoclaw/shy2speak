@@ -58,6 +58,8 @@ const cloudState = {
 const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: __dirname + '/..', stdio: 'ignore' });
 let browser;
 let savedProfile = null;
+let textCapabilityCalls = 0;
+let speechCapabilityCalls = 0;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -75,6 +77,10 @@ async function main() {
     if (url.includes('youtube.com/oembed')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ title: 'Live YouTube lesson', author_name: 'Verified channel', thumbnail_url: `${origin}/icons/icon.svg` }) });
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
+    if (url === 'https://text-ai.test/v1/models') { textCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'deepseek-chat' }] }) }); }
+    if (url === 'https://text-ai.test/v1/chat/completions') { textCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"translation":"购物中心","html":"<section>Lesson</section>"}' } }] }) }); }
+    if (url === 'https://speech-ai.test/v1/models') { speechCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'whisper-1' }] }) }); }
+    if (url === 'https://speech-ai.test/v1/audio/transcriptions') { speechCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: '' }) }); }
     if (url === `${origin}/api/health`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, database: 'postgresql', auth: { email: true, phone: true, emailOtp: false, phoneOtp: false, passwordRecovery: false } }) });
     if (url === `${origin}/api/auth/login`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 900, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
     if (url === `${origin}/api/learning-state` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(cloudState) });
@@ -335,9 +341,9 @@ async function main() {
   assert.ok((await page.locator('[data-provider="primary"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
   await page.locator('[data-provider="primary"] .test-model').click();
   assert.ok((await page.locator('#modalTitle').textContent()).includes('统一 AI'), 'real unified provider configuration dialog should open');
-  await page.fill('#providerBaseUrl', '');
+  await page.fill('#providerTextBaseUrl', '');
   await page.locator('#modalActions .primary-btn').click();
-  await page.waitForFunction(() => document.querySelector('#toastContainer')?.textContent.includes('API 地址'));
+  await page.waitForFunction(() => document.querySelector('#toastContainer')?.textContent.includes('文本 API 地址'));
   assert.equal(await page.locator('#appModal').evaluate((dialog) => dialog.open), true, 'validation feedback should keep the dialog open');
   assert.equal(await page.locator('#toastContainer').evaluate((node) => node.parentElement?.id), 'appModal', 'toast feedback triggered by a dialog must render inside the browser top layer');
   const modalToastVisible = await page.evaluate(() => {
@@ -347,8 +353,24 @@ async function main() {
     return rect.width > 0 && rect.height > 0 && (toast === topmost || toast.contains(topmost));
   });
   assert.equal(modalToastVisible, true, 'dialog toast must be visible and above the modal surface and backdrop');
-  await page.locator('#appModal').evaluate((dialog) => dialog.close());
+  await page.fill('#providerTextBaseUrl', 'https://text-ai.test/v1/');
+  await page.fill('#providerTextModel', 'deepseek-chat');
+  await page.fill('#providerTextApiKey', 'text-test-key');
+  await page.fill('#providerSpeechBaseUrl', 'https://speech-ai.test/v1/');
+  await page.fill('#providerSpeechModel', 'whisper-1');
+  await page.fill('#providerSpeechApiKey', 'speech-test-key');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
   await page.waitForFunction(() => document.querySelector('#toastContainer')?.parentElement === document.body);
+  assert.equal(textCapabilityCalls, 2, 'text capability validation should use the text provider for models and chat');
+  assert.equal(speechCapabilityCalls, 2, 'speech capability validation should use the speech provider for models and transcription');
+  assert.ok((await page.locator('.provider-status').textContent()).includes('三项能力已验证'), 'the unified card should report both channels as verified');
+  assert.equal(await page.locator('[data-model-role="speech"]').textContent(), 'whisper-1', 'speech capability should display the speech model');
+  assert.equal(await page.locator('[data-model-role="text"]').first().textContent(), 'deepseek-chat', 'text capabilities should display the text model');
+  const storedProvider = await page.evaluate(() => JSON.parse(localStorage.getItem('shy-ai-providers-v1')).primary);
+  assert.equal(storedProvider.textBaseUrl, 'https://text-ai.test/v1/');
+  assert.equal(storedProvider.speechBaseUrl, 'https://speech-ai.test/v1/');
+  assert.equal(Object.keys(storedProvider).some((key) => /apiKey|key/i.test(key)), false, 'API keys must never be persisted with the unified configuration');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.navigate('practice'));
