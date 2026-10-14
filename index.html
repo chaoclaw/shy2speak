@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=40"></script>
-    <link rel="stylesheet" href="./styles.css?v=40" />
+    <script src="./boot.js?v=41"></script>
+    <link rel="stylesheet" href="./styles.css?v=41" />
   </head>
   <body>
     <div class="app-shell">
@@ -22,7 +22,7 @@
         <nav class="side-nav">
           <button class="nav-item active" data-view-link="overview"><span>⌂</span><b data-i18n="navOverview">学习概览</b></button>
           <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
-          <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em id="navVocabularyCount">0</em></button>
+          <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em class="hidden" id="navVocabularyCount">0</em></button>
           <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
           <button class="nav-item" data-view-link="studio"><span>✦</span><b data-i18n="navStudio">内容工作台</b></button>
           <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
@@ -33,7 +33,7 @@
           <button class="nav-item" data-view-link="settings"><span>⚙</span><b data-i18n="navSettings">设置</b></button>
           <div class="mini-profile">
             <button class="avatar avatar-a" data-view-link="settings" aria-label="个人设置">LS</button>
-            <div><strong id="sidebarNickname">LinSpeak</strong><small id="sidebarAccountState">本机学习档案</small></div>
+            <div><strong id="sidebarNickname">学习者</strong><small id="sidebarAccountState">本机学习档案</small></div>
             <button class="icon-btn" data-view-link="settings" aria-label="更多设置">•••</button>
           </div>
         </div>
@@ -62,7 +62,7 @@
               <article class="welcome-card card">
                 <div class="welcome-copy">
                   <span class="pill success" id="streakStatus">● 正在读取学习记录</span>
-                  <h1>欢迎回来，<span id="welcomeNickname">Lin</span> 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
+                  <h1>欢迎回来，<span id="welcomeNickname"></span> 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
                   <p id="learningInsight">练习时长、次数与评分会保存在当前设备，并实时更新到学习概览。</p>
                   <div class="button-row">
                     <button class="primary-btn" id="continuePracticeButton" data-view-link="practice"><span id="continuePracticeLabel">继续学习</span><span aria-hidden="true">→</span></button>
@@ -295,7 +295,7 @@
             <div class="settings-grid">
               <article class="card account-settings"><div class="card-heading"><div><span class="eyebrow">ACCOUNT & SYNC</span><h3>账号与局域网同步</h3></div><span class="status warning" id="backendStatus">未连接</span></div><div class="account-service"><span class="service-mark">NAS</span><div><strong id="accountIdentity">离线学习模式</strong><small id="accountServiceMeta">本机数据正常可用；连接绿联 NAS 后可跨设备同步</small></div></div><div class="sync-state"><span id="syncStateIcon">↻</span><div><strong id="syncStateTitle">等待连接账号服务</strong><small id="syncStateMeta">学习记录仍会自动保存在当前设备</small></div></div><div class="button-row"><button class="secondary-btn" id="configureBackend">配置连接</button><button class="primary-btn" id="accountAction">登录 / 注册</button><button class="text-btn hidden" id="accountSignOut">退出登录</button></div></article>
 
-              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted" id="profileStorageStatus">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar" type="button" aria-label="上传自定义头像">LS</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="LS">LS</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn" id="uploadAvatar" type="button">上传自定义头像</button><input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden /></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="LinSpeak" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160">每天开口十分钟，让英语成为习惯。</textarea><small><span id="signatureCount">19</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
+              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted" id="profileStorageStatus">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar" type="button" aria-label="上传自定义头像">S</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="S">S</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn" id="uploadAvatar" type="button">上传自定义头像</button><input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden /></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160"></textarea><small><span id="signatureCount">0</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
 
               <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input id="reduceMotion" type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input id="highContrast" type="checkbox" /><i class="switch"></i></label></div></article>
 
@@ -326,9 +326,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=40"></script>
-    <script src="./i18n.js?v=40"></script>
-    <script src="./backend.js?v=40"></script>
-    <script src="./app.js?v=40"></script>
+    <script src="./runtime-config.js?v=41"></script>
+    <script src="./i18n.js?v=41"></script>
+    <script src="./backend.js?v=41"></script>
+    <script src="./app.js?v=41"></script>
   </body>
 </html>

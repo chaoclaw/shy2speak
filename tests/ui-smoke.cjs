@@ -88,6 +88,8 @@ async function main() {
   });
 
   await page.goto(`${origin}/#/practice`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('html.app-ready');
+  assert.notEqual(await page.locator('#welcomeNickname').textContent(), 'Lin', 'the welcome card must never expose the legacy placeholder nickname');
   await page.waitForSelector('#topicSelect option', { state: 'attached' });
   assert.equal(await page.locator('#topicSelect option').count(), 85, 'all 85 playlist topics should render');
   assert.match(await page.locator('#topicSelect option').first().textContent(), /^1\. /, 'video topics should be numbered from one');
@@ -197,6 +199,7 @@ async function main() {
   assert.equal(await page.locator('.vocabulary-empty').count(), 1, 'an honest vocabulary empty state should render');
   assert.equal(await page.locator('#cleanupOpen').isDisabled(), true, 'cleanup should be disabled when there are no saved words');
   assert.equal(await page.locator('#navVocabularyCount').textContent(), '0', 'the vocabulary badge should reflect the real empty library');
+  assert.equal(await page.locator('#navVocabularyCount').evaluate((node) => node.classList.contains('hidden')), true, 'a zero vocabulary count must hide the navigation badge');
 
   await page.evaluate(() => window.navigate('settings'));
   await page.locator('#reduceMotion').check({ force: true }); await page.locator('#highContrast').check({ force: true });
@@ -234,6 +237,7 @@ async function main() {
   await page.waitForFunction(() => document.querySelector('#backendStatus').textContent.includes('已登录'));
   assert.notEqual(await page.locator('.top-avatar').textContent(), '登录', 'authenticated users should see their profile avatar');
   assert.equal(await page.locator('#nicknameInput').inputValue(), 'NasLearner', 'authenticated profile should hydrate from the self-hosted backend adapter');
+  assert.equal(await page.locator('#welcomeNickname').textContent(), 'NasLearner', 'the welcome card should use the authenticated nickname');
   assert.ok((await page.locator('#syncStateTitle').textContent()).includes('同步'), 'login must run a learning-state synchronization');
   assert.equal(await page.locator('#metricAverageScore').textContent(), '91', 'newer cloud learning history should hydrate locally');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'forest', 'newer cloud preferences should hydrate locally');

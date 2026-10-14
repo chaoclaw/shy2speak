@@ -81,7 +81,7 @@ const hydratedTopicIds = new Set();
 const topicTranslationPromises = new Map();
 
 function storedProfile() {
-  return readStoredJSON(STORAGE_KEYS.profile, { nickname: 'LinSpeak', signature: '每天开口十分钟，让英语成为习惯。', avatar: 'LS' });
+  return readStoredJSON(STORAGE_KEYS.profile, { nickname: '', signature: '', avatar: 'S' });
 }
 
 function applyAvatarVisual(node, avatar, fallback = 'LS') {
@@ -93,11 +93,20 @@ function applyAvatarVisual(node, avatar, fallback = 'LS') {
 }
 
 function updateProfileChrome(profile = storedProfile()) {
-  const nickname = profile.nickname || 'Learner';
+  const nickname = profile.nickname || (state.language === 'en' ? 'Learner' : '学习者');
   const shortName = nickname.length > 12 ? `${nickname.slice(0, 12)}…` : nickname;
   if ($('#sidebarNickname')) $('#sidebarNickname').textContent = shortName;
   if ($('#welcomeNickname')) $('#welcomeNickname').textContent = nickname.split(/\s+/)[0];
   $$('.top-avatar,.mini-profile .avatar').forEach((node) => applyAvatarVisual(node, profile.avatar, nickname.slice(0, 2).toUpperCase()));
+}
+
+function updateVocabularyIndicators(value) {
+  const count = Math.max(0, Number(value) || 0);
+  $('#metricVocabularyCount').textContent = count;
+  $('#reviewCount').textContent = count;
+  const badge = $('#navVocabularyCount');
+  badge.textContent = count;
+  badge.classList.toggle('hidden', count === 0);
 }
 
 function updateTopAccountAvatar() {
@@ -330,9 +339,7 @@ function renderAnalyticsOverview() {
   $('#metricAverageScore').textContent = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : '—';
   $('#metricScoreCount').textContent = scores.length ? `${scores.length} 次真实评分` : '尚无 AI 评分';
   const vocabularyCount = $$('.word-list-item').length;
-  $('#metricVocabularyCount').textContent = vocabularyCount;
-  $('#navVocabularyCount').textContent = vocabularyCount;
-  $('#reviewCount').textContent = vocabularyCount;
+  updateVocabularyIndicators(vocabularyCount);
   if ($('#vocabularySummary')) $('#vocabularySummary').textContent = `${vocabularyCount} 个词 · 今天待复习 ${vocabularyCount} 个`;
   $('#todayMinutes').textContent = todayMinutes;
   $('#goalRing').style.setProperty('--progress', Math.min(100, Math.round((todayMinutes / 30) * 100)));
@@ -746,7 +753,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=40', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=41', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1628,9 +1635,7 @@ function renderVocabulary() {
   $('#cleanupBannerMeta').textContent = cleanupCount ? '它们仍保存在其他生词本中，需要检查吗？最多再提醒 2 次。' : '所有生词关系都已整理完成。';
   const count = state.vocabularyData.items.length;
   $('#vocabularySummary').textContent = state.language === 'en' ? `${count} saved word${count === 1 ? '' : 's'}` : `${count} 个词`;
-  $('#navVocabularyCount').textContent = count;
-  $('#reviewCount').textContent = count;
-  $('#metricVocabularyCount').textContent = count;
+  updateVocabularyIndicators(count);
   if (!count && $('#reviewFocus')) $('#reviewFocus').innerHTML = state.language === 'en'
     ? '<span>VOCABULARY</span><strong>No words due</strong><small>Your saved vocabulary will appear here.</small>'
     : '<span>VOCABULARY</span><strong>暂无待复习生词</strong><small>真实添加的生词会出现在这里</small>';
@@ -1644,7 +1649,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=40', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=41', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -2426,12 +2431,12 @@ function setupAI() {
 
 function applyProfileToForm(profile = storedProfile()) {
   if (!$('#nicknameInput')) return;
-  $('#nicknameInput').value = profile.nickname || 'LinSpeak';
+  $('#nicknameInput').value = profile.nickname || '';
   $('#signatureInput').value = profile.signature || '';
   $('#signatureCount').textContent = [...(profile.signature || '')].length;
-  state.pendingAvatar = profile.avatar || 'LS';
+  state.pendingAvatar = profile.avatar || 'S';
   applyAvatarVisual($('#profileAvatar'), state.pendingAvatar);
-  $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === (profile.avatar || 'LS')));
+  $$('.avatar-options .avatar').forEach((button) => button.classList.toggle('selected', button.dataset.avatar === (profile.avatar || 'S')));
   updateProfileChrome(profile);
 }
 
@@ -2483,7 +2488,7 @@ async function completeAuthenticatedSession(session) {
   try {
     const remoteProfile = await shyBackend.getProfile();
     if (remoteProfile) {
-      const profile = { nickname: remoteProfile.nickname, signature: remoteProfile.signature || '', avatar: remoteProfile.avatar || 'LS', updatedAt: remoteProfile.updated_at };
+      const profile = { nickname: remoteProfile.nickname, signature: remoteProfile.signature || '', avatar: remoteProfile.avatar || 'S', updatedAt: remoteProfile.updated_at };
       writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile);
     }
   } catch (error) { setSyncMessage('学习记录已同步', `资料读取提示：${friendlyAccountError(error)}`, 'success'); }
@@ -2641,7 +2646,7 @@ function setupSettings() {
   $('#saveProfile').addEventListener('click', async () => {
     const nickname = $('#nicknameInput').value.trim();
     if (nickname.length < 2 || reserved.includes(nickname.toLowerCase())) { toast('昵称格式不可用，请修改后再保存。'); return; }
-    const profile = { nickname, signature: $('#signatureInput').value.trim(), avatar: state.pendingAvatar || 'LS', updatedAt: new Date().toISOString() };
+    const profile = { nickname, signature: $('#signatureInput').value.trim(), avatar: state.pendingAvatar || 'S', updatedAt: new Date().toISOString() };
     try {
       if (state.authSession) await shyBackend.saveProfile({ ...profile, locale: state.language });
       writeStoredJSON(STORAGE_KEYS.profile, profile); applyProfileToForm(profile); scheduleCloudSync(50);
@@ -2678,6 +2683,7 @@ async function init() {
   applyAppearance();
   applyLanguage();
   setupLanguageObserver();
+  updateProfileChrome(storedProfile());
   document.documentElement.classList.add('app-ready');
   const account = await shyBackend.initialize().catch((error) => ({ session: null, error }));
   state.authSession = account.session || null;
