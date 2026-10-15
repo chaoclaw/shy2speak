@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=44"></script>
-    <link rel="stylesheet" href="./styles.css?v=44" />
+    <script src="./boot.js?v=45"></script>
+    <link rel="stylesheet" href="./styles.css?v=45" />
   </head>
   <body>
     <div class="app-shell">
@@ -83,7 +83,7 @@
 
             <div class="metric-grid">
               <article class="metric-card card"><span class="metric-icon violet">↗</span><div><small>本机学习</small><strong><span id="metricPracticeMinutes">0</span> <i>分钟</i></strong><em id="metricPracticeCount">0 次练习</em></div></article>
-              <article class="metric-card card"><span class="metric-icon mint">◎</span><div><small>真实评分均值</small><strong><span id="metricAverageScore">—</span> <i>分</i></strong><em id="metricScoreCount">尚无 AI 评分</em></div></article>
+              <article class="metric-card card"><span class="metric-icon mint">◎</span><div><small>练习评分均值</small><strong><span id="metricAverageScore">—</span> <i>分</i></strong><em id="metricScoreCount">尚无练习评分</em></div></article>
               <article class="metric-card card"><span class="metric-icon amber">◇</span><div><small>当前生词</small><strong><span id="metricVocabularyCount">0</span> <i>个</i></strong><em>本机词库</em></div></article>
               <article class="metric-card card"><span class="metric-icon blue">♪</span><div><small>磨耳朵</small><strong><span id="metricListeningMinutes">0</span> <i>分钟</i></strong><em>本机记录</em></div></article>
             </div>
@@ -99,11 +99,11 @@
 
               <article class="card skill-card">
                 <div class="card-heading"><div><span class="eyebrow">SKILLS</span><h3>能力变化</h3></div><button class="text-btn" id="skillReportButton">查看报告 →</button></div>
-                <div class="skill-row" data-skill="pronunciation"><div><span>发音准确度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
+                <div class="skill-row" data-skill="pronunciation"><div><span>内容准确度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
                 <div class="skill-row" data-skill="fluency"><div><span>流利度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
                 <div class="skill-row" data-skill="completeness"><div><span>完整度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
                 <div class="skill-row" data-skill="vocabulary"><div><span>词汇练习</span><b>0</b></div><div class="skill-track"><i style="width:0"></i></div></div>
-                <div class="insight" id="skillInsight"><span>✦</span><p>连接真实语音评分服务并完成首次跟读后，这里会展示能力变化。</p></div>
+                <div class="insight" id="skillInsight"><span>✦</span><p>使用浏览器语音识别完成首次跟读后，这里会展示练习变化。</p></div>
               </article>
             </div>
 
@@ -177,15 +177,16 @@
 
               <div class="practice-right">
                 <article class="score-card card">
-                  <div class="card-heading"><div><span class="eyebrow">AI FEEDBACK</span><h3>本句跟读结果</h3></div><div class="score-heading-actions"><span class="status warning" id="scoreDataStatus">等待真实评分</span><button class="text-btn">查看详情 →</button></div></div>
-                  <div class="word-scores"><span class="muted">完成录音并连接评分服务后显示逐词结果</span></div>
-                  <div class="score-grid"><div class="total-score"><strong>—</strong><span>/100</span><small>综合得分</small></div><div><span>发音</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>流利度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>完整度</span><strong>—</strong><i><b style="width:0"></b></i></div></div>
+                  <div class="card-heading"><div><span class="eyebrow">AI PRACTICE FEEDBACK</span><h3>本句跟读结果</h3></div><div class="score-heading-actions"><span class="status warning" id="scoreDataStatus">等待练习评分</span><button class="text-btn">查看详情 →</button></div></div>
+                  <div class="word-scores"><span class="muted">录音后通过浏览器识别显示逐词匹配结果</span></div>
+                  <div class="score-grid"><div class="total-score"><strong>—</strong><span>/100</span><small>综合得分</small></div><div><span>内容准确度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>流利度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>完整度</span><strong>—</strong><i><b style="width:0"></b></i></div></div>
+                  <p class="score-feedback">录音不会上传给 DeepSeek；仅发送识别文字和本地练习指标来生成反馈。</p>
                 </article>
 
                 <article class="card history-card">
                   <div class="card-heading"><div><span class="eyebrow">HISTORY</span><h3>本节历史成绩</h3></div><span class="pill muted" id="historyTrend">尚无评分</span></div>
                   <svg viewBox="0 0 520 110" role="img" aria-label="历史成绩折线图"><path d="M20 104 H500" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 7"/></svg>
-                  <div class="history-labels"><span>完成首次真实评分后生成历史曲线</span></div>
+                  <div class="history-labels"><span>完成首次练习评分后生成历史曲线</span></div>
                 </article>
               </div>
             </div>
@@ -266,13 +267,13 @@
 
           <!-- AI -->
           <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
-            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>一套配置管理文本与语音两条通道，可分别选择厂商和模型。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
-            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">文本模型 + 语音模型</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
+            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>使用一个文本模型处理翻译、HTML/PPT 和口语练习建议；录音不发送给 AI。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
+            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">一个文本模型 · 浏览器语音识别</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
 
             <div class="ai-layout">
-              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一配置能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>语音识别与发音输入</strong><span class="active-model-name" data-model-role="speech">尚未配置</span><span class="capability-status" data-capability="speech">待验证</span></div><div><strong>内容翻译</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
+              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一配置能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>口语文字识别</strong><span class="active-model-name" data-model-role="browser">Web Speech API</span><span class="capability-status" data-capability="browserSpeech">浏览器检测</span></div><div><strong>内容翻译与练习建议</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
 
-              <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs" id="promptTabs"></div><label class="editor-label">System Prompt<textarea id="promptEditor"></textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{word_scores}}</span><span>{{learner_level}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small id="promptVersion">本机模板 · 未修改</small></div><div class="button-row"><button class="text-btn" id="deletePrompt">删除</button><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
+              <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs" id="promptTabs"></div><label class="editor-label">System Prompt<textarea id="promptEditor"></textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{recognized_text}}</span><span>{{practice_metrics}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small id="promptVersion">本机模板 · 未修改</small></div><div class="button-row"><button class="text-btn" id="deletePrompt">删除</button><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
             </div>
           </section>
 
@@ -288,7 +289,7 @@
 
               <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>英语学习辅助语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
 
-              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small id="micDeviceSummary">尚未检测设备</small></div><span class="status warning" id="micPermissionStatus">待检测</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习与学习目标提醒</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>录音云端评分</strong><small>仅在连接真实评分服务后上传</small></div><span class="status warning">待配置</span><button class="secondary-btn compact" data-view-link="ai">配置</button></div></article>
+              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small id="micDeviceSummary">尚未检测设备</small></div><span class="status warning" id="micPermissionStatus">待检测</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习与学习目标提醒</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>DeepSeek 学习反馈</strong><small>仅发送识别文字与本地指标，不上传录音</small></div><span class="status warning">待配置</span><button class="secondary-btn compact" data-view-link="ai">配置</button></div></article>
             </div>
           </section>
         </div>
@@ -313,9 +314,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=44"></script>
-    <script src="./i18n.js?v=44"></script>
-    <script src="./backend.js?v=44"></script>
-    <script src="./app.js?v=44"></script>
+    <script src="./runtime-config.js?v=45"></script>
+    <script src="./i18n.js?v=45"></script>
+    <script src="./backend.js?v=45"></script>
+    <script src="./app.js?v=45"></script>
   </body>
 </html>

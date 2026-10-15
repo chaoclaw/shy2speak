@@ -26,6 +26,9 @@ const state = {
   mediaStream: null,
   recordingStartedAt: 0,
   recordingChunks: [],
+  speechRecognitionSession: null,
+  audioMetricSession: null,
+  recordingContext: null,
   promptId: localStorage.getItem('shy-prompt-id') || 'encouraging',
   listeningPlaylistId: localStorage.getItem('shy-listening-playlist-id') || 'course-all',
   listeningTrackIndex: 0,
@@ -55,10 +58,10 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PROMPTS = [
-  { id: 'encouraging', name: '鼓励型反馈', system: '你是一位耐心、准确的英语发音教练。根据语音服务返回的逐词与音素分数，为学习者提供简洁、可执行的反馈。不要修改原始分数。', isDefault: true },
-  { id: 'strict', name: '严格评分', system: '你是一位严格的英语发音评测员。只基于提供的发音、流利度与完整度数据给出反馈，并明确指出需要重练的音素。', isDefault: true },
-  { id: 'children', name: '儿童学习', system: '你是一位友善的少儿英语老师。使用积极、简短且容易理解的语言反馈发音问题，每次只给一个改进建议。', isDefault: true },
-  { id: 'business', name: '商务英语', system: '你是一位商务英语表达教练。结合语音评分说明清晰度、语气与专业表达，并给出一句可立即模仿的建议。', isDefault: true }
+  { id: 'encouraging', name: '鼓励型反馈', system: '你是一位耐心的英语口语教练。根据浏览器识别文字和本地计算的准确度、完整度、语速、停顿指标，提供简洁、可执行的建议。不要修改分数，也不要声称分析了音素或口音。', isDefault: true },
+  { id: 'strict', name: '严格评分', system: '你是一位严格的英语表达教练。只根据参考句、浏览器识别文字和本地练习指标反馈漏词、错词、语速与停顿。不要推断音素、重音或口音。', isDefault: true },
+  { id: 'children', name: '儿童学习', system: '你是一位友善的少儿英语老师。根据识别文字和练习指标使用积极、简短、容易理解的语言反馈，每次只给一个改进建议。', isDefault: true },
+  { id: 'business', name: '商务英语', system: '你是一位商务英语表达教练。根据识别文字、完整度、语速和停顿说明表达清晰度，并给出一句可立即模仿的建议。', isDefault: true }
 ];
 
 function readStoredJSON(key, fallback) {
@@ -336,7 +339,7 @@ function renderAnalyticsOverview() {
   $('#metricListeningMinutes').textContent = Math.round(listeningSeconds / 60);
   $('#metricPracticeCount').textContent = `${practiceCount} 次逐句练习`;
   $('#metricAverageScore').textContent = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : '—';
-  $('#metricScoreCount').textContent = scores.length ? `${scores.length} 次真实评分` : '尚无 AI 评分';
+  $('#metricScoreCount').textContent = scores.length ? `${scores.length} 次练习评分` : '尚无练习评分';
   const vocabularyCount = $$('.word-list-item').length;
   updateVocabularyIndicators(vocabularyCount);
   if ($('#vocabularySummary')) $('#vocabularySummary').textContent = `${vocabularyCount} 个词 · 今天待复习 ${vocabularyCount} 个`;
@@ -365,7 +368,7 @@ function renderAnalyticsOverview() {
   const vocabularyRow = $('.skill-row[data-skill="vocabulary"]');
   const vocabularyProgress = Math.min(100, practiceCount * 8);
   $('b', vocabularyRow).textContent = practiceCount; $('i', vocabularyRow).style.width = `${vocabularyProgress}%`;
-  $('#skillInsight p').textContent = lastScore ? `最近一次真实评分为 ${Math.round(lastScore.total)} 分；继续练习当前句子以观察变化。` : '连接真实语音评分服务并完成首次跟读后，这里会展示能力变化。';
+  $('#skillInsight p').textContent = lastScore ? `最近一次练习评分为 ${Math.round(lastScore.total)} 分；继续练习当前句子以观察变化。` : '使用浏览器语音识别完成首次跟读后，这里会展示练习变化。';
   const topic = currentTopic();
   if (topic) {
     const chapter = currentChapter();
@@ -414,8 +417,8 @@ function openSkillReport() {
   const english = state.language === 'en';
   const scoreText = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : '—';
   const metricLabels = english
-    ? { pronunciation: 'Pronunciation', fluency: 'Fluency', completeness: 'Completeness' }
-    : { pronunciation: '发音准确度', fluency: '流利度', completeness: '完整度' };
+    ? { pronunciation: 'Content accuracy', fluency: 'Fluency', completeness: 'Completeness' }
+    : { pronunciation: '内容准确度', fluency: '流利度', completeness: '完整度' };
   const metricRows = Object.entries(metricLabels).map(([key, label]) => {
     const value = report.averages[key];
     return `<div class="skill-report-metric"><div><span>${label}</span><strong>${scoreText(value)}</strong></div><i><b style="width:${Number.isFinite(value) ? Math.min(100, value) : 0}%"></b></i></div>`;
@@ -439,14 +442,14 @@ function openSkillReport() {
   const listeningMinutes = Math.round(report.listeningSeconds / 60);
   const body = report.scores.length ? `
     <section class="skill-report" data-report-state="scored">
-      <div class="skill-report-summary"><div><span>${english ? 'Average score' : '综合均分'}</span><strong>${scoreText(report.averages.total)}</strong><small id="skillReportScoreCount">${report.scores.length} ${english ? 'verified scores' : '次真实评分'}</small></div><p><b>${escapeHTML(trend)}</b><small>${weakest ? (english ? `Current focus: ${metricLabels[weakest]}` : `当前建议重点：${metricLabels[weakest]}`) : ''}</small></p></div>
+      <div class="skill-report-summary"><div><span>${english ? 'Average score' : '综合均分'}</span><strong>${scoreText(report.averages.total)}</strong><small id="skillReportScoreCount">${report.scores.length} ${english ? 'practice scores' : '次练习评分'}</small></div><p><b>${escapeHTML(trend)}</b><small>${weakest ? (english ? `Current focus: ${metricLabels[weakest]}` : `当前建议重点：${metricLabels[weakest]}`) : ''}</small></p></div>
       <div class="skill-report-metrics">${metricRows}</div>
       <div class="skill-report-facts"><span><b>${report.practiceCount}</b><small>${english ? 'sentence attempts' : '逐句练习次数'}</small></span><span><b>${practiceMinutes}</b><small>${english ? 'practice minutes' : '跟读分钟'}</small></span><span><b>${listeningMinutes}</b><small>${english ? 'listening minutes' : '听力分钟'}</small></span><span><b>${report.vocabularyCount}</b><small>${english ? 'saved words' : '生词数量'}</small></span></div>
-      <div class="skill-report-history"><strong>${english ? 'Recent verified scores' : '最近真实评分'}</strong><ul>${history}</ul></div>
-      <p class="skill-report-note">${english ? 'This report uses only completed pronunciation scores and recorded practice activity; missing data is never estimated.' : '本报告只使用已完成的真实语音评分和学习记录；缺失数据不会使用估算值。'}</p>
+      <div class="skill-report-history"><strong>${english ? 'Recent practice scores' : '最近练习评分'}</strong><ul>${history}</ul></div>
+      <p class="skill-report-note">${english ? 'Practice scores use browser transcripts and local timing metrics. They do not evaluate phonemes, stress, or accent.' : '练习评分使用浏览器识别文字和本地时长指标，不评价音素、重音或口音。'}</p>
     </section>` : `
     <section class="skill-report" id="skillReportEmpty" data-report-state="empty">
-      <div class="skill-report-empty"><span>◎</span><strong>${english ? 'No verified pronunciation scores yet' : '尚无真实发音评分'}</strong><p>${english ? 'Complete a sentence recording with a connected AI speech service to establish your skill baseline.' : '连接支持语音的 AI 服务并完成一句跟读评分后，即可建立能力基线。'}</p></div>
+      <div class="skill-report-empty"><span>◎</span><strong>${english ? 'No practice scores yet' : '尚无练习评分'}</strong><p>${english ? 'Record one sentence in a browser with speech recognition to establish your practice baseline.' : '使用支持语音识别的浏览器完成一句跟读，即可建立练习基线。'}</p></div>
       <div class="skill-report-facts"><span><b>${report.practiceCount}</b><small>${english ? 'sentence attempts' : '逐句练习次数'}</small></span><span><b>${practiceMinutes}</b><small>${english ? 'practice minutes' : '跟读分钟'}</small></span><span><b>${listeningMinutes}</b><small>${english ? 'listening minutes' : '听力分钟'}</small></span><span><b>${report.vocabularyCount}</b><small>${english ? 'saved words' : '生词数量'}</small></span></div>
       <p class="skill-report-note">${english ? 'Practice activity is shown as recorded. No sample score is inserted.' : '已有练习数据会如实展示，不会插入示例评分。'}</p>
     </section>`;
@@ -483,9 +486,9 @@ function translatedUiText(value) {
     .replace(/^今天再练 (\d+) 分钟$/, 'Practice $1 more min today')
     .replace(/^● 已记录 (\d+) 个学习日$/, '● $1 active learning days recorded')
     .replace(/^你已经完成 (\d+) 次逐句练习；每次练习时长与录音次数都保存在当前设备。$/, 'You have completed $1 sentence practices; time and recording counts are saved on this device.')
-    .replace(/^最近一次真实评分为 (\d+) 分；继续练习当前句子以观察变化。$/, 'Your latest verified score is $1; keep practicing this sentence to track progress.')
+    .replace(/^最近一次练习评分为 (\d+) 分；继续练习当前句子以观察变化。$/, 'Your latest practice score is $1; keep practicing this sentence to track progress.')
     .replace(/^(\d+) 次逐句练习$/, '$1 sentence practices')
-    .replace(/^(\d+) 次真实评分$/, '$1 verified scores')
+    .replace(/^(\d+) 次练习评分$/, '$1 practice scores')
     .replace(/^跟读 (\d+) 分钟$/, 'Speaking $1 min')
     .replace(/^听力 (\d+) 分钟$/, 'Listening $1 min')
     .replace(/^复习 (\d+) 分钟$/, 'Review $1 min')
@@ -752,7 +755,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=44', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=45', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1394,6 +1397,141 @@ function setupNotifications() {
   });
 }
 
+function browserSpeechRecognitionConstructor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function beginBrowserSpeechRecognition() {
+  const Recognition = browserSpeechRecognitionConstructor();
+  if (!Recognition) return null;
+  const recognition = new Recognition();
+  recognition.lang = 'en-US'; recognition.continuous = true; recognition.interimResults = false; recognition.maxAlternatives = 1;
+  let resolveEnd;
+  const session = { recognition, results: new Map(), error: '', running: false, promise: new Promise((resolve) => { resolveEnd = resolve; }) };
+  const settle = () => { if (!session.running && session.settled) return; session.running = false; session.settled = true; resolveEnd(); };
+  recognition.onstart = () => { session.running = true; };
+  recognition.onresult = (event) => {
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      const result = event.results[index]; const alternative = result?.[0];
+      if (result?.isFinal && alternative?.transcript) session.results.set(index, { transcript: alternative.transcript.trim(), confidence: Number(alternative.confidence) });
+    }
+  };
+  recognition.onerror = (event) => { if (!['aborted', 'no-speech'].includes(event.error)) session.error = event.error || 'recognition-error'; };
+  recognition.onend = settle;
+  try { recognition.start(); session.running = true; }
+  catch (error) { session.error = error.message || 'start-failed'; settle(); }
+  return session;
+}
+
+async function finishBrowserSpeechRecognition(session) {
+  if (!session) return { supported: false, transcript: '', confidence: null, error: 'unsupported' };
+  try { if (session.running) session.recognition.stop(); } catch { /* Recognition may already be ending. */ }
+  await Promise.race([session.promise, new Promise((resolve) => setTimeout(resolve, 1800))]);
+  const results = [...session.results.entries()].sort(([left], [right]) => left - right).map(([, result]) => result);
+  const confidences = results.map((result) => result.confidence).filter(Number.isFinite);
+  return {
+    supported: true,
+    transcript: results.map((result) => result.transcript).join(' ').trim(),
+    confidence: confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : null,
+    error: session.error,
+  };
+}
+
+function beginAudioMetricSession(stream) {
+  const session = { samples: [], timer: 0, context: null, source: null };
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return session;
+    session.context = new AudioContext(); session.source = session.context.createMediaStreamSource(stream);
+    const analyser = session.context.createAnalyser(); analyser.fftSize = 1024; session.source.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    session.timer = setInterval(() => {
+      analyser.getFloatTimeDomainData(samples);
+      const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+      if (Number.isFinite(rms)) session.samples.push(rms);
+    }, 80);
+  } catch { /* Duration and transcript metrics remain available without Web Audio. */ }
+  return session;
+}
+
+function finishAudioMetricSession(session, duration) {
+  if (session?.timer) clearInterval(session.timer);
+  try { session?.source?.disconnect(); } catch { /* Already disconnected. */ }
+  session?.context?.close?.().catch?.(() => {});
+  const samples = session?.samples || [];
+  const averageRms = samples.length ? samples.reduce((sum, value) => sum + value, 0) / samples.length : null;
+  const deviation = samples.length && averageRms ? Math.sqrt(samples.reduce((sum, value) => sum + (value - averageRms) ** 2, 0) / samples.length) : null;
+  const voiced = samples.filter((value) => value >= 0.018).length;
+  return {
+    durationSeconds: Number(duration.toFixed(2)),
+    silenceRatio: Number((samples.length ? 1 - voiced / samples.length : 0.15).toFixed(3)),
+    volumeStability: Math.round(samples.length && averageRms ? Math.max(0, Math.min(100, 100 - (deviation / averageRms) * 45)) : 75),
+    averageRms: averageRms === null ? null : Number(averageRms.toFixed(4)),
+  };
+}
+
+function practiceWords(value) {
+  return String(value || '').toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) || [];
+}
+
+function alignPracticeWords(referenceWords, spokenWords) {
+  const rows = referenceWords.length + 1; const columns = spokenWords.length + 1;
+  const matrix = Array.from({ length: rows }, () => Array(columns).fill(0));
+  for (let row = 0; row < rows; row += 1) matrix[row][0] = row;
+  for (let column = 0; column < columns; column += 1) matrix[0][column] = column;
+  for (let row = 1; row < rows; row += 1) for (let column = 1; column < columns; column += 1) {
+    matrix[row][column] = referenceWords[row - 1] === spokenWords[column - 1]
+      ? matrix[row - 1][column - 1]
+      : 1 + Math.min(matrix[row - 1][column], matrix[row][column - 1], matrix[row - 1][column - 1]);
+  }
+  const words = referenceWords.map((word) => ({ word, score: 35, matched: false }));
+  let row = referenceWords.length; let column = spokenWords.length; let matched = 0;
+  while (row || column) {
+    if (row && column && referenceWords[row - 1] === spokenWords[column - 1]) { words[row - 1] = { word: referenceWords[row - 1], score: 100, matched: true }; matched += 1; row -= 1; column -= 1; }
+    else if (row && column && matrix[row][column] === matrix[row - 1][column - 1] + 1) { row -= 1; column -= 1; }
+    else if (row && matrix[row][column] === matrix[row - 1][column] + 1) row -= 1;
+    else if (column) column -= 1;
+    else break;
+  }
+  return { distance: matrix.at(-1).at(-1), matched, words };
+}
+
+function buildPracticeScore(referenceText, recognizedText, duration, audioMetrics = {}, recognitionConfidence = null) {
+  const referenceWords = practiceWords(referenceText); const spokenWords = practiceWords(recognizedText);
+  const alignment = alignPracticeWords(referenceWords, spokenWords);
+  const clamp = (value) => Math.max(0, Math.min(100, Math.round(value)));
+  const accuracy = clamp((1 - alignment.distance / Math.max(1, referenceWords.length, spokenWords.length)) * 100);
+  const completeness = clamp((alignment.matched / Math.max(1, referenceWords.length)) * 100);
+  const wordsPerMinute = duration > 0 ? spokenWords.length / duration * 60 : 0;
+  const paceScore = spokenWords.length ? clamp(100 - Math.abs(wordsPerMinute - 135) * 0.72) : 0;
+  const audibleScore = clamp(100 - Number(audioMetrics.silenceRatio ?? 0.15) * 100);
+  const fluency = clamp(paceScore * 0.55 + audibleScore * 0.3 + Number(audioMetrics.volumeStability ?? 75) * 0.15);
+  const total = clamp(accuracy * 0.45 + completeness * 0.3 + fluency * 0.25);
+  return {
+    total, pronunciation: accuracy, accuracy, fluency, completeness, words: alignment.words,
+    scoreType: 'practice', scoringMethod: 'browser-speech-local-metrics', recognizedText,
+    metrics: { ...audioMetrics, wordsPerMinute: Math.round(wordsPerMinute), recognitionConfidence: Number.isFinite(recognitionConfidence) ? Number(recognitionConfidence.toFixed(3)) : null },
+  };
+}
+
+async function requestPracticeFeedback(score, referenceText) {
+  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = primaryProviderConfig(providers.primary || providers.openai);
+  const apiKey = sessionStorage.getItem('shy-ai-key-text') || sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
+  if (!provider?.lastTestOk || !provider.textBaseUrl || !provider.textModel || !apiKey) return null;
+  const library = getPromptLibrary(); const prompt = library.items.find((item) => item.id === state.promptId) || library.items.find((item) => item.id === library.activeId) || DEFAULT_PROMPTS[0];
+  const input = { referenceText, recognizedText: score.recognizedText, scores: { total: score.total, accuracy: score.accuracy, fluency: score.fluency, completeness: score.completeness }, metrics: score.metrics };
+  const response = await fetch(providerEndpoint(provider.textBaseUrl, 'chat/completions'), {
+    method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: provider.textModel, temperature: 0.2, messages: [{ role: 'system', content: prompt.system }, { role: 'user', content: `下面只有浏览器识别文字和本地指标，没有原始录音。不得评价音素、重音或口音，也不得修改分数。请用${state.language === 'en' ? 'English' : '简体中文'}返回 JSON：{"feedback":"两句以内的具体建议","focusWords":["需要重练的参考词"]}\n${JSON.stringify(input)}` }] }),
+  });
+  if (!response.ok) throw new Error(`DeepSeek 反馈生成失败：HTTP ${response.status}`);
+  const payload = await response.json(); const content = String(payload?.choices?.[0]?.message?.content || '').replace(/^```(?:json)?\s*|\s*```$/g, '');
+  let parsed;
+  try { parsed = JSON.parse(content); } catch { throw new Error('DeepSeek 没有返回有效的反馈 JSON。'); }
+  if (!parsed.feedback) throw new Error('DeepSeek 返回的反馈内容为空。');
+  return { feedback: String(parsed.feedback), focusWords: Array.isArray(parsed.focusWords) ? parsed.focusWords.map(String).slice(0, 8) : [] };
+}
+
 async function startRecording() {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     toast('当前浏览器不支持网页录音，请使用最新版 Chrome、Edge 或 Safari。');
@@ -1403,6 +1541,8 @@ async function startRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
     const recorder = new MediaRecorder(stream);
     state.mediaStream = stream; state.mediaRecorder = recorder; state.recordingChunks = []; state.recordingStartedAt = performance.now();
+    state.recordingContext = { topicId: state.topicId, chapterId: state.chapterId, sentenceId: state.sentenceId || 'unspecified', referenceText: currentSentence()?.en || '' };
+    state.speechRecognitionSession = beginBrowserSpeechRecognition(); state.audioMetricSession = beginAudioMetricSession(stream);
     recorder.addEventListener('dataavailable', (event) => { if (event.data.size) state.recordingChunks.push(event.data); });
     recorder.addEventListener('stop', completeRecording, { once: true });
     recorder.start(250);
@@ -1417,59 +1557,51 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  try { if (state.speechRecognitionSession?.running) state.speechRecognitionSession.recognition.stop(); } catch { /* Recognition may already be ending. */ }
   if (state.mediaRecorder?.state === 'recording') state.mediaRecorder.stop();
 }
 
-function completeRecording() {
+async function completeRecording() {
   const duration = Math.max(.1, (performance.now() - state.recordingStartedAt) / 1000);
   const mimeType = state.mediaRecorder?.mimeType || 'audio/webm';
   const blob = new Blob(state.recordingChunks, { type: mimeType });
+  const context = state.recordingContext || { topicId: state.topicId, chapterId: state.chapterId, sentenceId: state.sentenceId || 'unspecified', referenceText: currentSentence()?.en || '' };
+  const recognitionSession = state.speechRecognitionSession; const audioMetrics = finishAudioMetricSession(state.audioMetricSession, duration);
   state.mediaStream?.getTracks().forEach((track) => track.stop());
-  state.mediaRecorder = null; state.mediaStream = null; state.recordingChunks = [];
+  state.mediaRecorder = null; state.mediaStream = null; state.recordingChunks = []; state.speechRecognitionSession = null; state.audioMetricSession = null; state.recordingContext = null;
   $('#recordButton').classList.remove('recording');
   $('#recordLabel').textContent = '按住跟读';
-  const sentenceKey = `${state.topicId}:${state.chapterId}:${state.sentenceId || 'unspecified'}`;
+  const sentenceKey = `${context.topicId}:${context.chapterId}:${context.sentenceId}`;
   analytics.increment('sentences', sentenceKey, 'recordings');
   analytics.event('recording', { sentenceId: sentenceKey, durationSeconds: Number(duration.toFixed(2)), bytes: blob.size, mimeType });
   analytics.save(); renderAnalyticsOverview();
   const recordings = (analytics.data.events || []).filter((event) => event.type === 'recording');
   if ($('#recordingSummary')) $('#recordingSummary').textContent = `${recordings.length} 次录音 · 原始音频默认不持久保存`;
   if ($('#recordingSize')) $('#recordingSize').textContent = formatBytes(recordings.reduce((sum, event) => sum + Number(event.bytes || 0), 0));
-  $('#scoreDataStatus').textContent = '真实录音 · 待 AI 评分';
+  $('#scoreDataStatus').textContent = '正在整理练习结果…';
   $('#scoreDataStatus').className = 'status warning';
-  const speechProvider = readStoredJSON(STORAGE_KEYS.providers, {}).speech;
-  const speechKey = sessionStorage.getItem('shy-ai-key-speech');
-  if (speechProvider?.lastTestOk && speechKey) {
-    $('#scoreDataStatus').textContent = '正在真实评分…';
-    requestPronunciationScore(blob, speechProvider, speechKey).then((score) => {
-      analytics.addScore('sentences', sentenceKey, score);
-      analytics.addScore('chapters', `${state.topicId}:${state.chapterId}`, score);
-      analytics.addScore('topics', state.topicId, score);
-      renderPracticeScore(score); renderAnalyticsOverview();
-      toast(`真实 AI 评分完成：${Math.round(score.total)} 分。`);
-    }).catch((error) => { $('#scoreDataStatus').textContent = '评分失败'; $('#scoreDataStatus').className = 'status warning'; toast(error.message); });
-  } else toast(`录音已完成（${duration.toFixed(1)} 秒，${Math.max(1, Math.round(blob.size / 1024))} KB）。连接语音评分服务后可生成真实分数。`);
-}
-
-async function requestPronunciationScore(blob, provider, apiKey) {
-  const sentence = currentSentence();
-  const body = new FormData();
-  body.append('audio', blob, `practice-${Date.now()}.webm`);
-  body.append('reference_text', sentence?.en || '');
-  body.append('language', 'en-US');
-  body.append('prompt_id', state.promptId);
-  const response = await fetch(provider.baseUrl, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body });
-  if (!response.ok) throw new Error(`真实语音评分失败：HTTP ${response.status}`);
-  const result = await response.json();
-  const score = {
-    total: Number(result.total ?? result.score),
-    pronunciation: Number(result.pronunciation ?? result.accuracy),
-    fluency: Number(result.fluency),
-    completeness: Number(result.completeness),
-    words: Array.isArray(result.words) ? result.words : [],
-  };
-  if (![score.total, score.pronunciation, score.fluency, score.completeness].every(Number.isFinite)) throw new Error('评分服务返回的数据格式不完整。');
-  return score;
+  const recognition = await finishBrowserSpeechRecognition(recognitionSession);
+  if (!recognition.supported) {
+    $('#scoreDataStatus').textContent = '浏览器不支持语音识别'; $('.score-feedback').textContent = '录音已完成，但当前浏览器无法生成文字练习评分。请使用最新版 Chrome 或 Edge。';
+    toast(`录音已保存为本次记录（${duration.toFixed(1)} 秒）；当前浏览器不支持语音识别。`); return;
+  }
+  if (!recognition.transcript) {
+    $('#scoreDataStatus').textContent = '未识别到英文'; $('.score-feedback').textContent = '请靠近麦克风，在安静环境中重新朗读当前英文句子。';
+    toast(recognition.error ? `浏览器语音识别失败：${recognition.error}` : '没有识别到英文，请重新录制。'); return;
+  }
+  const score = buildPracticeScore(context.referenceText, recognition.transcript, duration, audioMetrics, recognition.confidence);
+  score.feedback = `浏览器识别为：“${recognition.transcript}”。已根据文字匹配、语速和停顿生成本地练习评分。`;
+  renderPracticeScore(score);
+  $('#scoreDataStatus').textContent = '正在生成 DeepSeek 反馈…'; $('#scoreDataStatus').className = 'status warning';
+  try {
+    const aiFeedback = await requestPracticeFeedback(score, context.referenceText);
+    if (aiFeedback) { score.feedback = aiFeedback.feedback; score.focusWords = aiFeedback.focusWords; score.feedbackGenerated = true; }
+  } catch (error) { toast(`${error.message} 已保留本地练习评分。`); }
+  analytics.addScore('sentences', sentenceKey, score);
+  analytics.addScore('chapters', `${context.topicId}:${context.chapterId}`, score);
+  analytics.addScore('topics', context.topicId, score);
+  renderPracticeScore(score); renderAnalyticsOverview();
+  toast(`${score.feedbackGenerated ? 'DeepSeek 反馈' : '本地练习评分'}完成：${Math.round(score.total)} 分。录音未上传给 AI。`);
 }
 
 function renderPracticeScore(score) {
@@ -1483,7 +1615,8 @@ function renderPracticeScore(score) {
   const fallbackWords = (currentSentence()?.en || '').replace(/[^A-Za-z' -]/g, '').split(/\s+/).filter(Boolean);
   const items = score.words.length ? score.words : fallbackWords.map((word) => ({ word, score: score.pronunciation }));
   items.forEach((item) => { const span = document.createElement('span'); span.textContent = item.word || item.text || ''; span.className = Number(item.score ?? item.accuracy ?? 100) >= 75 ? 'good' : 'warn'; words.append(span); });
-  $('#scoreDataStatus').textContent = '真实 AI 评分'; $('#scoreDataStatus').className = 'status success';
+  $('.score-feedback').textContent = score.feedback || '已根据浏览器识别文字、语速与停顿生成练习评分。';
+  $('#scoreDataStatus').textContent = score.feedbackGenerated ? 'DeepSeek 练习反馈' : '本地练习评分'; $('#scoreDataStatus').className = 'status success';
   renderScoreHistory();
 }
 
@@ -1493,7 +1626,7 @@ function renderScoreHistory() {
   const labels = $('.history-labels'); const svg = $('.history-card svg');
   if (!recent.length) {
     $('#historyTrend').textContent = '尚无评分'; $('#historyTrend').className = 'pill muted';
-    labels.innerHTML = '<span>完成首次真实评分后生成历史曲线</span>';
+    labels.innerHTML = '<span>完成首次练习评分后生成历史曲线</span>';
     svg.innerHTML = '<path d="M20 104 H500" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 7"/>';
     return;
   }
@@ -1516,8 +1649,9 @@ function renderStoredPracticeResults() {
   else {
     $('.total-score strong').textContent = '—';
     [['pronunciation', 2], ['fluency', 3], ['completeness', 4]].forEach(([, position]) => { const cell = $(`.score-grid > div:nth-child(${position})`); $('strong', cell).textContent = '—'; $('i b', cell).style.width = '0'; });
-    $('.word-scores').innerHTML = '<span class="muted">完成录音并连接评分服务后显示逐词结果</span>';
-    $('#scoreDataStatus').textContent = '等待真实评分'; $('#scoreDataStatus').className = 'status warning';
+    $('.word-scores').innerHTML = '<span class="muted">录音后通过浏览器识别显示逐词匹配结果</span>';
+    $('.score-feedback').textContent = '录音不会上传给 DeepSeek；仅发送识别文字和本地练习指标来生成反馈。';
+    $('#scoreDataStatus').textContent = '等待练习评分'; $('#scoreDataStatus').className = 'status warning';
     renderScoreHistory();
   }
 }
@@ -1658,7 +1792,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=44', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=45', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -2210,8 +2344,6 @@ function primaryProviderConfig(provider) {
     ...provider,
     textBaseUrl: provider.textBaseUrl || provider.baseUrl || '',
     textModel: provider.textModel || provider.model || '',
-    speechBaseUrl: provider.speechBaseUrl || '',
-    speechModel: provider.speechModel || '',
   };
 }
 
@@ -2220,29 +2352,28 @@ function updateProviderCards() {
   const provider = primaryProviderConfig(providers.primary || providers.openai);
   const card = $('.provider-card[data-provider="primary"]');
   const status = $('.provider-status', card);
+  const browserSupported = Boolean(browserSpeechRecognitionConstructor());
+  const browserModel = $('.active-model-name[data-model-role="browser"]');
+  const browserStatus = $('.capability-status[data-capability="browserSpeech"]');
+  browserModel.textContent = 'Web Speech API';
+  browserStatus.textContent = browserSupported ? '✓ 当前浏览器支持' : '当前浏览器不支持';
+  browserStatus.className = `capability-status${browserSupported ? ' yes' : ''}`;
   if (!provider) {
     status.textContent = '● 待配置'; status.className = 'status warning provider-status';
-    $$('.active-model-name').forEach((node) => { node.textContent = '尚未配置'; });
-    $$('.capability-status').forEach((node) => { node.textContent = '待验证'; node.className = 'capability-status'; });
+    $$('.active-model-name[data-model-role="text"]').forEach((node) => { node.textContent = '尚未配置'; });
+    $$('.capability-status:not([data-capability="browserSpeech"])').forEach((node) => { node.textContent = '待验证'; node.className = 'capability-status'; });
     return;
   }
-  const complete = provider.lastTestOk && provider.textBaseUrl && provider.textModel && provider.speechBaseUrl && provider.speechModel && provider.speechDetected && provider.translationDetected && provider.htmlPptDetected;
-  status.textContent = complete ? '● 三项能力已验证' : '● 已保存 · 待完整验证';
+  const complete = provider.lastTestOk && provider.textBaseUrl && provider.textModel && provider.translationDetected && provider.htmlPptDetected;
+  status.textContent = complete ? '● 文本能力已验证' : '● 已保存 · 待完整验证';
   status.className = `status ${complete ? 'success' : 'warning'} provider-status`;
   $('#primaryProviderName').textContent = provider.name || '统一 AI 服务';
-  $('#primaryProviderMeta').textContent = `文本：${provider.textModel || '未配置'} · 语音：${provider.speechModel || '未配置'}`;
-  $$('.active-model-name').forEach((node) => { node.textContent = node.dataset.modelRole === 'speech' ? (provider.speechModel || '尚未配置') : (provider.textModel || '尚未配置'); });
-  $$('.capability-status').forEach((node) => {
+  $('#primaryProviderMeta').textContent = `文本：${provider.textModel || '未配置'} · 口语：浏览器识别`;
+  $$('.active-model-name[data-model-role="text"]').forEach((node) => { node.textContent = provider.textModel || '尚未配置'; });
+  $$('.capability-status:not([data-capability="browserSpeech"])').forEach((node) => {
     const verified = Boolean(provider[`${node.dataset.capability}Detected`]);
     node.textContent = verified ? '✓ 已实测' : '待验证'; node.className = `capability-status${verified ? ' yes' : ''}`;
   });
-}
-
-function silentWavBlob() {
-  const sampleRate = 8000; const sampleCount = 2000; const buffer = new ArrayBuffer(44 + sampleCount * 2); const view = new DataView(buffer);
-  const write = (offset, value) => [...value].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
-  write(0, 'RIFF'); view.setUint32(4, 36 + sampleCount * 2, true); write(8, 'WAVE'); write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); write(36, 'data'); view.setUint32(40, sampleCount * 2, true);
-  return new Blob([buffer], { type: 'audio/wav' });
 }
 
 function validatedProviderBaseUrl(value, label) {
@@ -2253,17 +2384,14 @@ function validatedProviderBaseUrl(value, label) {
   } catch (error) { throw new Error(error.message || `${label}无效。`); }
 }
 
-async function testProviderConnection(config, keys) {
+async function testProviderConnection(config, apiKey) {
   const textBaseUrl = validatedProviderBaseUrl(config.textBaseUrl, '文本 API 地址');
-  const speechBaseUrl = validatedProviderBaseUrl(config.speechBaseUrl, '语音 API 地址');
   if (!config.textModel) throw new Error('请填写文本模型 ID。');
-  if (!config.speechModel) throw new Error('请填写语音转写模型 ID。');
-  if (!keys.text) throw new Error('请填写文本服务 API Key；密钥只保存在当前标签页。');
-  if (!keys.speech) throw new Error('请填写语音服务 API Key；密钥只保存在当前标签页。');
+  if (!apiKey) throw new Error('请填写文本服务 API Key；密钥只保存在当前标签页。');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
-    const textHeaders = { Authorization: `Bearer ${keys.text}` };
+    const textHeaders = { Authorization: `Bearer ${apiKey}` };
     const textModelsResponse = await fetch(providerEndpoint(textBaseUrl, 'models'), { headers: textHeaders, signal: controller.signal });
     const textModelsBody = await textModelsResponse.text();
     if (!textModelsResponse.ok) throw new Error(`文本服务连接失败：HTTP ${textModelsResponse.status}${textModelsBody ? ` · ${textModelsBody.slice(0, 90)}` : ''}`);
@@ -2279,18 +2407,7 @@ async function testProviderConnection(config, keys) {
     const contentPayload = await contentResponse.json(); const content = String(contentPayload?.choices?.[0]?.message?.content || '');
     const translationDetected = /[\u3400-\u9fff]/.test(content); const htmlPptDetected = /<section[\s>]/i.test(content);
     if (!translationDetected || !htmlPptDetected) throw new Error('模型已响应，但没有同时返回中文翻译和有效 HTML slide。');
-    const speechHeaders = { Authorization: `Bearer ${keys.speech}` };
-    const speechModelsResponse = await fetch(providerEndpoint(speechBaseUrl, 'models'), { headers: speechHeaders, signal: controller.signal });
-    const speechModelsBody = await speechModelsResponse.text();
-    if (!speechModelsResponse.ok) throw new Error(`语音服务连接失败：HTTP ${speechModelsResponse.status}${speechModelsBody ? ` · ${speechModelsBody.slice(0, 90)}` : ''}`);
-    let speechModelsPayload = null;
-    try { speechModelsPayload = JSON.parse(speechModelsBody); } catch { throw new Error('语音服务模型列表没有返回有效 JSON。'); }
-    const speechModelIds = Array.isArray(speechModelsPayload?.data) ? speechModelsPayload.data.map((model) => model.id || '') : [];
-    if (speechModelIds.length && !speechModelIds.includes(config.speechModel)) throw new Error(`语音服务模型列表中没有找到 “${config.speechModel}”。`);
-    const audioBody = new FormData(); audioBody.append('file', silentWavBlob(), 'capability-check.wav'); audioBody.append('model', config.speechModel);
-    const audioResponse = await fetch(providerEndpoint(speechBaseUrl, 'audio/transcriptions'), { method: 'POST', headers: speechHeaders, body: audioBody, signal: controller.signal });
-    if (!audioResponse.ok) throw new Error(`语音服务不支持 audio/transcriptions：HTTP ${audioResponse.status}。请改用支持 Whisper/OpenAI-compatible 转写的服务。`);
-    return { speechDetected: true, translationDetected, htmlPptDetected, textModelCount: textModelIds.length, speechModelCount: speechModelIds.length };
+    return { translationDetected, htmlPptDetected, textModelCount: textModelIds.length };
   } catch (error) {
     if (error.name === 'AbortError') throw new Error('连接超时，请检查 API 地址、网络或跨域配置。');
     throw error;
@@ -2302,31 +2419,40 @@ function openProviderModal() {
   const stored = primaryProviderConfig(providers.primary || providers.openai) || {};
   showModal({
     eyebrow: 'UNIFIED AI CONNECTION', title: '配置统一 AI 服务',
-    body: `<div class="modal-field"><label for="providerName">配置名称</label><input id="providerName" value="${escapeHTML(stored.name || '统一 AI 服务')}"></div><section class="provider-channel"><div><span>TEXT</span><strong>文本、翻译与 HTML/PPT</strong></div><div class="modal-field"><label for="providerTextBaseUrl">文本 API Base URL</label><input id="providerTextBaseUrl" inputmode="url" value="${escapeHTML(stored.textBaseUrl || 'https://api.deepseek.com/')}"></div><div class="modal-field"><label for="providerTextModel">文本模型 ID</label><input id="providerTextModel" value="${escapeHTML(stored.textModel || '')}" placeholder="例如 deepseek-chat"></div><div class="modal-field"><label for="providerTextApiKey">文本服务 API Key（仅当前标签页）</label><input id="providerTextApiKey" type="password" autocomplete="off"></div></section><section class="provider-channel"><div><span>SPEECH</span><strong>语音转写与音频输入</strong></div><div class="modal-field"><label for="providerSpeechBaseUrl">语音 API Base URL</label><input id="providerSpeechBaseUrl" inputmode="url" value="${escapeHTML(stored.speechBaseUrl || 'https://api.openai.com/v1/')}"></div><div class="modal-field"><label for="providerSpeechModel">语音转写模型 ID</label><input id="providerSpeechModel" value="${escapeHTML(stored.speechModel || '')}" placeholder="例如 whisper-1"></div><div class="modal-field"><label for="providerSpeechApiKey">语音服务 API Key（仅当前标签页）</label><input id="providerSpeechApiKey" type="password" autocomplete="off"></div></section><div class="capability-checklist"><span>统一验证</span><strong>语音输入</strong><strong>内容翻译</strong><strong>HTML PPT</strong></div><div class="warning-box"><span>🔒</span><p><strong>密钥不会写入持久存储</strong><br><small>文本与语音可使用不同厂商。将分别读取模型列表、测试翻译与 HTML slide，并提交短静音 WAV 验证转写接口。</small></p></div>`,
+    body: `<div class="modal-field"><label for="providerName">配置名称</label><input id="providerName" value="${escapeHTML(stored.name || 'DeepSeek AI 服务')}"></div><section class="provider-channel"><div><span>TEXT</span><strong>文本、翻译、HTML/PPT 与练习建议</strong></div><div class="modal-field"><label for="providerTextBaseUrl">文本 API Base URL</label><input id="providerTextBaseUrl" inputmode="url" value="${escapeHTML(stored.textBaseUrl || 'https://api.deepseek.com/')}"></div><div class="modal-field"><label for="providerTextModel">文本模型 ID</label><input id="providerTextModel" value="${escapeHTML(stored.textModel || '')}" placeholder="例如 deepseek-chat"></div><div class="modal-field"><label for="providerTextApiKey">文本服务 API Key（仅当前标签页）</label><input id="providerTextApiKey" type="password" autocomplete="off"></div></section><div class="capability-checklist"><span>统一验证</span><strong>练习建议</strong><strong>内容翻译</strong><strong>HTML PPT</strong></div><div class="warning-box"><span>♩</span><p><strong>无需语音模型或音频接口</strong><br><small>录音由浏览器识别，本地计算文字准确度、完整度、语速和停顿。只把识别文字与指标发送给当前文本模型；录音不会上传给该 AI 服务。浏览器语音识别本身可能依照浏览器服务条款联网。</small></p></div>`,
     actions: [{ label: '取消' }, { label: '测试并保存', style: 'primary', onClick: async () => {
-      const config = { name: $('#providerName').value.trim(), textBaseUrl: $('#providerTextBaseUrl').value.trim(), textModel: $('#providerTextModel').value.trim(), speechBaseUrl: $('#providerSpeechBaseUrl').value.trim(), speechModel: $('#providerSpeechModel').value.trim(), updatedAt: new Date().toISOString() };
-      const keys = { text: $('#providerTextApiKey').value.trim(), speech: $('#providerSpeechApiKey').value.trim() };
+      const config = { name: $('#providerName').value.trim(), textBaseUrl: $('#providerTextBaseUrl').value.trim(), textModel: $('#providerTextModel').value.trim(), updatedAt: new Date().toISOString() };
+      const apiKey = $('#providerTextApiKey').value.trim();
       if (!config.textBaseUrl) { toast('请填写文本 API 地址。'); return false; }
-      if (!config.speechBaseUrl) { toast('请填写语音 API 地址。'); return false; }
-      const result = await testProviderConnection(config, keys);
+      const result = await testProviderConnection(config, apiKey);
       providers.primary = { ...config, ...result, lastTestOk: true, lastTestedAt: new Date().toISOString() };
       delete providers.openai;
       writeStoredJSON(STORAGE_KEYS.providers, providers);
-      sessionStorage.setItem('shy-ai-key-text', keys.text);
-      sessionStorage.setItem('shy-ai-key-speech-channel', keys.speech);
+      sessionStorage.setItem('shy-ai-key-text', apiKey);
+      sessionStorage.removeItem('shy-ai-key-speech-channel');
       updateProviderCards();
-      toast('文本、语音两条通道及三项能力已验证通过。');
+      toast('文本模型的翻译、HTML/PPT 和练习反馈能力已验证通过。');
     } }],
   });
 }
 
 function getPromptLibrary() {
   const stored = readStoredJSON(STORAGE_KEYS.prompts, null);
-  if (stored?.items?.length) return stored;
-  return { activeId: 'encouraging', items: DEFAULT_PROMPTS.map((prompt) => ({ ...prompt })), updatedAt: null };
+  if (stored?.items?.length) {
+    if (stored.version === 2) return stored;
+    const migrated = {
+      ...stored,
+      version: 2,
+      items: stored.items.map((prompt) => prompt.isDefault ? { ...(DEFAULT_PROMPTS.find((item) => item.id === prompt.id) || prompt) } : prompt),
+    };
+    writeStoredJSON(STORAGE_KEYS.prompts, migrated);
+    return migrated;
+  }
+  return { version: 2, activeId: 'encouraging', items: DEFAULT_PROMPTS.map((prompt) => ({ ...prompt })), updatedAt: null };
 }
 
 function savePromptLibrary(library) {
+  library.version = 2;
   library.updatedAt = new Date().toISOString();
   writeStoredJSON(STORAGE_KEYS.prompts, library);
 }
@@ -2360,7 +2486,7 @@ function setupAI() {
     $('#promptEditor').value = fallback.system;
     toast('已恢复系统默认内容，点击“保存并启用”后生效。');
   });
-  $('#testPrompt').addEventListener('click', () => showModal({ eyebrow: 'LOCAL PROMPT CHECK', title: '提示词结构检查', body: `<div class="warning-box"><span>✓</span><p><strong>模板变量与长度检查通过</strong><br><small>当前仅执行本地结构验证；连接 AI 服务后才能运行真实 A/B 输出测试。</small></p></div><p>已识别变量：reference_text、word_scores、learner_level、feedback_language。</p>`, actions: [{ label: '完成', style: 'primary' }] }));
+  $('#testPrompt').addEventListener('click', () => showModal({ eyebrow: 'LOCAL PROMPT CHECK', title: '提示词结构检查', body: `<div class="warning-box"><span>✓</span><p><strong>模板变量与长度检查通过</strong><br><small>当前仅执行本地结构验证；连接 AI 服务后才能运行真实 A/B 输出测试。</small></p></div><p>可用数据：reference_text、recognized_text、practice_metrics、feedback_language。不会向文本模型发送录音。</p>`, actions: [{ label: '完成', style: 'primary' }] }));
   $('#savePrompt').addEventListener('click', () => {
     const library = getPromptLibrary();
     const current = library.items.find((prompt) => prompt.id === state.promptId);

@@ -59,7 +59,8 @@ const server = spawn('python3', ['-m', 'http.server', String(port), '--bind', '1
 let browser;
 let savedProfile = null;
 let textCapabilityCalls = 0;
-let speechCapabilityCalls = 0;
+let textFeedbackCalls = 0;
+let feedbackRequestBody = null;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -78,9 +79,15 @@ async function main() {
     if (url.includes('youtube-nocookie.com/embed/')) return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>YouTube fixture</title>' });
     if (url.includes('i.ytimg.com')) return route.fulfill({ status: 204 });
     if (url === 'https://text-ai.test/v1/models') { textCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'deepseek-chat' }] }) }); }
-    if (url === 'https://text-ai.test/v1/chat/completions') { textCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"translation":"购物中心","html":"<section>Lesson</section>"}' } }] }) }); }
-    if (url === 'https://speech-ai.test/v1/models') { speechCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'whisper-1' }] }) }); }
-    if (url === 'https://speech-ai.test/v1/audio/transcriptions') { speechCapabilityCalls += 1; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: '' }) }); }
+    if (url === 'https://text-ai.test/v1/chat/completions') {
+      const body = route.request().postDataJSON(); const prompt = body.messages?.at(-1)?.content || '';
+      if (prompt.includes('没有原始录音')) {
+        textFeedbackCalls += 1; feedbackRequestBody = body;
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"feedback":"Keep the pace steady and repeat clearly.","focusWords":["clearly"]}' } }] }) });
+      }
+      textCapabilityCalls += 1;
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"translation":"购物中心","html":"<section>Lesson</section>"}' } }] }) });
+    }
     if (url === `${origin}/api/health`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, database: 'postgresql', auth: { email: true, phone: true, emailOtp: false, phoneOtp: false, passwordRecovery: false } }) });
     if (url === `${origin}/api/auth/login`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 900, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
     if (url === `${origin}/api/learning-state` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(cloudState) });
@@ -255,8 +262,8 @@ async function main() {
 
   await page.evaluate(() => window.navigate('overview'));
   await page.click('#skillReportButton');
-  assert.equal(await page.locator('[data-report-state="scored"]').count(), 1, 'skill report button should open a report backed by verified scores');
-  assert.equal(await page.locator('#skillReportScoreCount').textContent(), '1 次真实评分', 'skill report should expose the real verified-score count');
+  assert.equal(await page.locator('[data-report-state="scored"]').count(), 1, 'skill report button should open a report backed by recorded practice scores');
+  assert.equal(await page.locator('#skillReportScoreCount').textContent(), '1 次练习评分', 'skill report should expose the recorded practice-score count');
   assert.ok((await page.locator('#modalBody').textContent()).includes('91'), 'skill report should display the synchronized real score');
   await page.locator('#modalActions .secondary-btn').click();
 
@@ -361,21 +368,30 @@ async function main() {
   await page.fill('#providerTextBaseUrl', 'https://text-ai.test/v1/');
   await page.fill('#providerTextModel', 'deepseek-chat');
   await page.fill('#providerTextApiKey', 'text-test-key');
-  await page.fill('#providerSpeechBaseUrl', 'https://speech-ai.test/v1/');
-  await page.fill('#providerSpeechModel', 'whisper-1');
-  await page.fill('#providerSpeechApiKey', 'speech-test-key');
   await page.locator('#modalActions .primary-btn').click();
   await page.waitForFunction(() => !document.querySelector('#appModal').open);
   await page.waitForFunction(() => document.querySelector('#toastContainer')?.parentElement === document.body);
   assert.equal(textCapabilityCalls, 2, 'text capability validation should use the text provider for models and chat');
-  assert.equal(speechCapabilityCalls, 2, 'speech capability validation should use the speech provider for models and transcription');
-  assert.ok((await page.locator('.provider-status').textContent()).includes('三项能力已验证'), 'the unified card should report both channels as verified');
-  assert.equal(await page.locator('[data-model-role="speech"]').textContent(), 'whisper-1', 'speech capability should display the speech model');
+  assert.equal(await page.locator('#providerSpeechBaseUrl').count(), 0, 'the unified configuration must not require a speech provider');
+  assert.ok((await page.locator('.provider-status').textContent()).includes('文本能力已验证'), 'the unified card should report the text model as verified');
+  assert.equal(await page.locator('[data-model-role="browser"]').textContent(), 'Web Speech API', 'speech recognition should be delegated to the browser');
   assert.equal(await page.locator('[data-model-role="text"]').first().textContent(), 'deepseek-chat', 'text capabilities should display the text model');
   const storedProvider = await page.evaluate(() => JSON.parse(localStorage.getItem('shy-ai-providers-v1')).primary);
   assert.equal(storedProvider.textBaseUrl, 'https://text-ai.test/v1/');
-  assert.equal(storedProvider.speechBaseUrl, 'https://speech-ai.test/v1/');
+  assert.equal('speechBaseUrl' in storedProvider, false, 'no speech endpoint should be persisted');
   assert.equal(Object.keys(storedProvider).some((key) => /apiKey|key/i.test(key)), false, 'API keys must never be persisted with the unified configuration');
+  const practiceResult = await page.evaluate(() => buildPracticeScore('Repeat this sentence clearly.', 'Repeat this sentence clearly.', 2, { silenceRatio: 0.1, volumeStability: 90 }, 0.95));
+  assert.equal(practiceResult.accuracy, 100, 'exact browser transcript should receive full content accuracy');
+  assert.equal(practiceResult.completeness, 100, 'exact browser transcript should receive full completeness');
+  assert.equal(practiceResult.scoringMethod, 'browser-speech-local-metrics', 'practice scoring should identify its non-phoneme method');
+  const aiFeedback = await page.evaluate(async () => {
+    const score = buildPracticeScore('Repeat this sentence clearly.', 'Repeat this sentence clearly.', 2, { silenceRatio: 0.1, volumeStability: 90 }, 0.95);
+    return requestPracticeFeedback(score, 'Repeat this sentence clearly.');
+  });
+  assert.equal(aiFeedback.feedback, 'Keep the pace steady and repeat clearly.', 'DeepSeek-compatible text feedback should be returned');
+  assert.equal(textFeedbackCalls, 1, 'practice advice should make one text-only AI request');
+  assert.ok(feedbackRequestBody.messages.at(-1).content.includes('recognizedText'), 'feedback request should include the browser transcript');
+  assert.equal(/audio|base64|webm/i.test(JSON.stringify(feedbackRequestBody)), false, 'feedback request must not upload audio data');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.navigate('practice'));
