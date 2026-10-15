@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN" data-mode="light" data-theme="violet">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#6658e8" />
+    <meta name="description" content="Shy2Speak — 用真实内容练习英语口语" />
+    <title>Shy2Speak · 英语口语学习</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <script src="./boot.js?v=45"></script>
+    <link rel="stylesheet" href="./styles.css?v=45" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <button class="brand" data-view-link="overview" aria-label="Shy2Speak 首页">
+          <span class="brand-mark">S</span>
+          <span class="brand-copy"><strong>Shy2Speak</strong><small>Speak a little. Grow a lot.</small></span>
+        </button>
+
+        <nav class="side-nav">
+          <button class="nav-item active" data-view-link="overview"><span>⌂</span><b data-i18n="navOverview">学习概览</b></button>
+          <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
+          <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em class="hidden" id="navVocabularyCount">0</em></button>
+          <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
+          <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <button class="nav-item sidebar-collapse" id="sidebarCollapse" type="button" aria-label="收起侧边栏"><span aria-hidden="true">‹</span><b>收起侧边栏</b></button>
+          <button class="nav-item" data-view-link="settings"><span>⚙</span><b data-i18n="navSettings">设置</b></button>
+          <div class="mini-profile">
+            <button class="avatar avatar-a" data-view-link="settings" aria-label="个人设置">LS</button>
+            <div><strong id="sidebarNickname">学习者</strong><small id="sidebarAccountState">本机学习档案</small></div>
+            <button class="icon-btn" data-view-link="settings" aria-label="更多设置">•••</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <button class="mobile-menu icon-btn" id="mobileMenu" aria-label="打开菜单">☰</button>
+          <div class="top-context">
+            <span class="eyebrow" id="pageEyebrow">YOUR LEARNING SPACE</span>
+            <strong id="pageTitle">学习概览</strong>
+          </div>
+          <div class="top-actions">
+            <button class="compact-control" id="languageToggle" aria-label="切换界面语言">中 / EN</button>
+            <button class="compact-control icon-only" id="modeToggle" aria-label="切换到夜间模式"><span id="modeIcon" aria-hidden="true">☼</span></button>
+            <button class="icon-btn share-page" aria-label="分享当前页面">↗</button>
+            <button class="icon-btn notification-btn" id="notificationButton" aria-label="通知">♢<i id="notificationDot"></i></button>
+            <button class="avatar top-avatar account-anonymous" data-view-link="settings" aria-label="登录">登录</button>
+          </div>
+        </header>
+
+        <div class="view-container">
+          <!-- Overview -->
+          <section class="view active" id="view-overview" data-title-zh="学习概览" data-title-en="Learning overview">
+            <div class="hero-grid">
+              <article class="welcome-card card">
+                <div class="welcome-copy">
+                  <span class="pill success" id="streakStatus">● 正在读取学习记录</span>
+                  <h1>欢迎回来，<span id="welcomeNickname"></span> 👋<br /><span id="goalMessage">今天从第一句开始</span>，积累真实进步。</h1>
+                  <p id="learningInsight">练习时长、次数与评分会保存在当前设备，并实时更新到学习概览。</p>
+                  <div class="button-row">
+                    <button class="primary-btn" id="continuePracticeButton" data-view-link="practice"><span id="continuePracticeLabel">继续学习</span><span aria-hidden="true">→</span></button>
+                    <button class="secondary-btn" data-view-link="listening">开始磨耳朵</button>
+                  </div>
+                </div>
+                <div class="goal-ring" id="goalRing" style="--progress: 0">
+                  <div><strong id="todayMinutes">0</strong><span>/ 30 分钟</span><small>今日目标</small></div>
+                </div>
+              </article>
+
+              <article class="focus-card card">
+                <div class="card-heading"><div><span class="eyebrow">TODAY</span><h3>今日复习</h3></div><span class="count-badge" id="reviewCount">0</span></div>
+                <div class="focus-word" id="reviewFocus"><span>VOCABULARY</span><strong>暂无待复习生词</strong><small>真实添加的生词会出现在这里</small></div>
+                <div class="mini-progress"><span style="width: 0"></span></div>
+                <button class="primary-btn full" data-view-link="vocabulary">查看生词本</button>
+              </article>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric-card card"><span class="metric-icon violet">↗</span><div><small>本机学习</small><strong><span id="metricPracticeMinutes">0</span> <i>分钟</i></strong><em id="metricPracticeCount">0 次练习</em></div></article>
+              <article class="metric-card card"><span class="metric-icon mint">◎</span><div><small>练习评分均值</small><strong><span id="metricAverageScore">—</span> <i>分</i></strong><em id="metricScoreCount">尚无练习评分</em></div></article>
+              <article class="metric-card card"><span class="metric-icon amber">◇</span><div><small>当前生词</small><strong><span id="metricVocabularyCount">0</span> <i>个</i></strong><em>本机词库</em></div></article>
+              <article class="metric-card card"><span class="metric-icon blue">♪</span><div><small>磨耳朵</small><strong><span id="metricListeningMinutes">0</span> <i>分钟</i></strong><em>本机记录</em></div></article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="card chart-card">
+                <div class="card-heading"><div><span class="eyebrow">ACTIVITY</span><h3>本周学习节奏</h3></div><div class="segmented mini"><button class="active">7天</button><button>30天</button></div></div>
+                <div class="bar-chart" aria-label="本周学习时长柱状图">
+                  <div><span style="height:42%"></span><small>一</small></div><div><span style="height:65%"></span><small>二</small></div><div><span style="height:48%"></span><small>三</small></div><div><span style="height:86%"></span><small>四</small></div><div><span style="height:58%"></span><small>五</small></div><div><span style="height:100%"></span><small>六</small></div><div class="today"><span style="height:72%"></span><small>日</small></div>
+                </div>
+                <div class="chart-legend"><span><i class="legend-dot primary"></i><b id="legendPractice">跟读 0 分钟</b></span><span><i class="legend-dot mint"></i><b id="legendListening">听力 0 分钟</b></span><span><i class="legend-dot amber"></i><b id="legendReview">复习 0 分钟</b></span></div>
+              </article>
+
+              <article class="card skill-card">
+                <div class="card-heading"><div><span class="eyebrow">SKILLS</span><h3>能力变化</h3></div><button class="text-btn" id="skillReportButton">查看报告 →</button></div>
+                <div class="skill-row" data-skill="pronunciation"><div><span>内容准确度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
+                <div class="skill-row" data-skill="fluency"><div><span>流利度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
+                <div class="skill-row" data-skill="completeness"><div><span>完整度</span><b>—</b></div><div class="skill-track"><i style="width:0"></i></div></div>
+                <div class="skill-row" data-skill="vocabulary"><div><span>词汇练习</span><b>0</b></div><div class="skill-track"><i style="width:0"></i></div></div>
+                <div class="insight" id="skillInsight"><span>✦</span><p>使用浏览器语音识别完成首次跟读后，这里会展示练习变化。</p></div>
+              </article>
+            </div>
+
+            <div class="section-heading"><div><span class="eyebrow">CONTINUE</span><h2>继续学习</h2></div><button class="text-btn" data-view-link="practice">查看全部 →</button></div>
+            <div class="course-row">
+              <article class="course-card card" data-view-link="practice"><div class="course-cover cover-purple"><span>01</span><i>▶</i></div><div class="course-body"><span class="pill">YOUTUBE PLAYLIST</span><h3 id="overviewTopicTitle">YouTube 英语口语练习</h3><p id="overviewTopicMeta">真实视频 · 练习稿待核对</p><div class="course-progress"><span><i id="overviewTopicProgress" style="width:0"></i></span><b id="overviewTopicProgressLabel">0%</b></div></div></article>
+              <article class="course-card card" data-view-link="practice"><div class="course-cover cover-teal"><span>＋</span><i>▶</i></div><div class="course-body"><span class="pill">EXPANDABLE</span><h3>添加更多 YouTube 视频</h3><p>粘贴链接即可创建新主题</p><div class="course-progress"><span><i style="width:0"></i></span><b>待添加</b></div></div></article>
+              <article class="achievement-card card"><div class="achievement-medal">◆</div><div><span class="eyebrow">DATA READY</span><h3>真实课程已接入</h3><p>YouTube 官方播放、学习记录与本机存储均已启用。</p></div></article>
+            </div>
+          </section>
+
+          <!-- Practice -->
+          <section class="view" id="view-practice" data-title-zh="视频学习" data-title-en="Video practice">
+            <div class="page-heading">
+              <div><span class="eyebrow" id="practiceTopicEyebrow">YOUTUBE · REAL CONTENT</span><h1 id="practiceTopicTitle">Mall Vocabulary In English</h1><p class="topic-localized-title" id="practiceTopicLocalizedTitle">商场英语词汇</p><p id="practiceChapterTitle">正在读取课程数据…</p></div>
+              <div class="button-row practice-heading-actions"><label class="topic-picker" for="topicSelect"><span>当前主题</span><select id="topicSelect" aria-label="选择视频主题"></select></label><button class="secondary-btn" id="importTopic">＋ 视频</button><button class="secondary-btn share-page">↗ 分享</button></div>
+            </div>
+
+            <div class="practice-layout">
+              <div class="practice-left">
+                <article class="card chapters-card">
+                  <div class="card-heading"><div><span class="eyebrow">CHAPTERS</span><h3>本章内容</h3></div><span class="muted">4 小节 · 约 28 分钟</span></div>
+                  <button class="chapter done"><i>✓</i><span><strong>Chapter 01</strong><small>Why Confidence Matters</small></span><em>08:12</em></button>
+                  <button class="chapter done"><i>✓</i><span><strong>Chapter 02</strong><small>Common Fears and How to Overcome Them</small></span><em>07:36</em></button>
+                  <button class="chapter active"><i>▶</i><span><strong>Chapter 03</strong><small>Starting a Conversation</small></span><em>06:58</em></button>
+                  <button class="chapter"><i>4</i><span><strong>Chapter 04</strong><small>Keep the Conversation Going</small></span><em>05:24</em></button>
+                </article>
+
+                <article class="card preview-card">
+                  <div><span class="metric-icon amber">◇</span><div><span class="eyebrow">PREVIEW</span><h3>课前预习词表</h3><p>15 个重点单词 · 8 个短语 · 预计 5 分钟</p></div></div>
+                  <button class="secondary-btn" data-view-link="vocabulary">开始预习 →</button>
+                </article>
+              </div>
+
+              <section class="practice-learning card" aria-label="视频与逐句跟读">
+                <article class="video-card">
+                  <div class="video-stage" id="videoStage">
+                    <div class="teacher-visual"><div class="teacher-head"></div><div class="teacher-body"></div><div class="speech-card"><small>SMALL TALK</small><strong>Big<br />Connections</strong></div></div>
+                    <img class="youtube-poster" id="youtubePoster" alt="YouTube 视频封面" loading="lazy" />
+                    <div class="video-source"><span>YOUTUBE</span><small id="videoSourceLabel">通过官方播放器加载</small></div>
+                    <button class="big-play" id="youtubePlay" aria-label="加载并播放 YouTube 视频">▶</button>
+                    <span class="local-state hidden" id="localState">✓ 本地视频</span>
+                    <div class="video-controls" id="videoPreviewControls"><button aria-label="播放">▶</button><span>官方视频</span><div class="media-progress"><i style="width:0"></i></div><button>字幕</button><button>1×</button><button title="视频小窗">▣</button></div>
+                  </div>
+                </article>
+
+                <article class="lyrics-card">
+                  <div class="lyrics-toolbar">
+                    <div class="segmented" id="practiceModeTabs"><button class="active" data-practice-mode="sentences">逐句跟读</button><button data-practice-mode="transcript">全文字幕</button><button data-practice-mode="expressions">重点表达 <i id="keyExpressionCount">0</i></button></div>
+                    <div class="toolbar-actions"><span class="status warning transcript-status" id="transcriptStatus">练习稿</span><button class="icon-btn" title="字幕语言">中/EN</button><button class="icon-btn">⋮</button></div>
+                  </div>
+                  <div class="lyrics-list" id="practiceLyrics">
+                    <button class="lyric-line"><em>1</em><span><strong>Hi, nice to meet you.</strong><small>你好，很高兴认识你。</small></span><i>▶</i></button>
+                    <button class="lyric-line"><em>2</em><span><strong>I'm a little nervous, but that's normal.</strong><small>我有点紧张，但这很正常。</small></span><i>▶</i></button>
+                    <button class="lyric-line active"><em>3</em><span><strong>The best way to build <mark data-word="confidence">confidence</mark> is to practice a little every day.</strong><small>建立自信最好的方法就是每天练习一点。</small></span><i>🔊</i></button>
+                    <button class="lyric-line"><em>4</em><span><strong>Start with simple questions like “How's your day?”</strong><small>从简单的问题开始，比如“你今天过得怎么样？”</small></span><i>▶</i></button>
+                    <button class="lyric-line"><em>5</em><span><strong>People usually appreciate a friendly and open tone.</strong><small>人们通常会欣赏友好和开放的态度。</small></span><i>▶</i></button>
+                  </div>
+
+                  <div class="record-panel">
+                    <button class="round-control">|‹</button>
+                    <div class="mic-stack">
+                      <button class="record-button" id="recordButton"><span>♩</span></button>
+                      <strong id="recordLabel">按住跟读</strong>
+                      <button class="mic-device" id="micDeviceButton">MacBook Pro 麦克风 · Mono Ch 1 <span>⌄</span></button>
+                    </div>
+                    <button class="round-control">↻</button>
+                  </div>
+                </article>
+              </section>
+
+              <div class="practice-right">
+                <article class="score-card card">
+                  <div class="card-heading"><div><span class="eyebrow">AI PRACTICE FEEDBACK</span><h3>本句跟读结果</h3></div><div class="score-heading-actions"><span class="status warning" id="scoreDataStatus">等待练习评分</span><button class="text-btn">查看详情 →</button></div></div>
+                  <div class="word-scores"><span class="muted">录音后通过浏览器识别显示逐词匹配结果</span></div>
+                  <div class="score-grid"><div class="total-score"><strong>—</strong><span>/100</span><small>综合得分</small></div><div><span>内容准确度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>流利度</span><strong>—</strong><i><b style="width:0"></b></i></div><div><span>完整度</span><strong>—</strong><i><b style="width:0"></b></i></div></div>
+                  <p class="score-feedback">录音不会上传给 DeepSeek；仅发送识别文字和本地练习指标来生成反馈。</p>
+                </article>
+
+                <article class="card history-card">
+                  <div class="card-heading"><div><span class="eyebrow">HISTORY</span><h3>本节历史成绩</h3></div><span class="pill muted" id="historyTrend">尚无评分</span></div>
+                  <svg viewBox="0 0 520 110" role="img" aria-label="历史成绩折线图"><path d="M20 104 H500" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 7"/></svg>
+                  <div class="history-labels"><span>完成首次练习评分后生成历史曲线</span></div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- Vocabulary -->
+          <section class="view" id="view-vocabulary" data-title-zh="生词本" data-title-en="Vocabulary">
+            <div class="page-heading">
+              <div><span class="eyebrow">VOCABULARY LIBRARY</span><h1>我的生词本</h1><p id="vocabularySummary">0 个词</p></div>
+              <div class="button-row"><button class="secondary-btn" id="cleanupOpen">待清理 <span class="count-inline" id="cleanupCount">3</span></button><button class="primary-btn">开始复习 →</button></div>
+            </div>
+
+            <div class="cleanup-banner hidden" id="cleanupBanner">
+              <div><span>♢</span><p><strong id="cleanupBannerTitle">没有待清理生词</strong><small id="cleanupBannerMeta">所有生词关系都已整理完成。</small></p></div>
+              <div class="button-row"><button class="text-btn" id="dismissCleanup">不再提示</button><button class="secondary-btn" id="reviewCleanup">检查生词</button></div>
+            </div>
+
+            <div class="vocab-preference card">
+              <div class="vocab-preference-copy"><span class="preference-icon">译</span><div><span class="eyebrow">LEARNING LANGUAGE</span><strong>学习辅助语言</strong><small>英语原文保持不变，释义和例句翻译使用你最熟悉的语言。</small></div></div>
+              <label><span>释义与翻译</span><select id="definitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label>
+            </div>
+
+            <div class="vocab-toolbar card">
+              <div class="search-box"><span>⌕</span><input id="vocabSearch" placeholder="搜索单词、翻译或标签" /></div>
+              <label>生词本<select id="wordbookSelect"><option>全部生词本</option><option>默认生词本</option></select></label>
+              <button class="filter-btn">更多筛选</button>
+            </div>
+
+            <div class="vocab-layout">
+              <div class="word-list card" id="wordList"><div class="vocabulary-empty"><span>＋</span><strong>还没有生词</strong><small>这里仅显示你实际保存的单词和短语。</small></div></div>
+
+              <article class="word-detail card hidden" id="wordDetail">
+                <div class="word-detail-head"><div><span class="pill" id="detailTypeLevel">WORD</span><h2 id="detailWord">—</h2><p><span id="detailPhonetic"></span><button class="sound-btn">🔊</button></p></div><div class="button-row"><button class="icon-btn share-page">↗</button><button class="primary-btn compact" id="detailBookStatus">已在默认生词本 ✓</button></div></div>
+                <div class="definition-block"><span class="index">01</span><div><strong id="primaryDefinition" dir="auto">—</strong><p id="definitionText" dir="auto"></p><div class="example"><span>COURSE EXAMPLE</span><p id="detailExample"></p><small id="detailExampleTranslation" dir="auto"></small><button id="detailVideoLink" data-view-link="practice">▶ 打开视频</button></div></div></div>
+
+                <div class="word-family"><div class="card-heading"><h3>词根、近义词与双向链接</h3><button class="text-btn">查看知识网络 →</button></div><div class="family-links" id="detailRelated"></div></div>
+
+                <div class="media-links"><div class="card-heading"><h3>关联的视频与音频</h3><span>0 个真实主题</span></div><button class="media-link" data-view-link="practice"><span class="media-thumb cover-purple">▶</span><div><strong id="detailMediaTitle">—</strong><small id="detailMediaMeta"></small></div><em>→</em></button></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Listening -->
+          <section class="view" id="view-listening" data-title-zh="磨耳朵" data-title-en="Immersive listening">
+            <div class="page-heading">
+              <div><span class="eyebrow">IMMERSIVE LISTENING</span><h1>磨耳朵</h1><p>从学过的内容中随机播放，让英语成为背景声音。</p></div>
+              <div class="button-row"><button class="secondary-btn" id="editPlaylist">编辑列表</button><button class="primary-btn" id="newPlaylist">＋ 新建列表</button></div>
+            </div>
+
+            <div class="listening-layout">
+              <aside class="playlist-panel card">
+                <div class="card-heading"><h3>我的音频列表</h3><span class="count-badge" id="listeningPlaylistCount">1</span></div>
+                <div id="listeningPlaylistList"></div>
+                <div class="queue-heading"><div><strong>音频队列</strong><small id="listeningQueueSummary">正在读取课程…</small></div><span id="listeningEditHint">选择一条播放</span></div>
+                <div class="listening-queue" id="listeningQueue"></div>
+                <div class="playlist-summary"><span>真实课程</span><strong id="listeningQueueCount">0 / 0</strong><div><i id="listeningQueueProgress" style="width:0"></i></div></div>
+              </aside>
+
+              <article class="audio-player card">
+                <div class="audio-topline"><span class="pill success">♪ 音乐播放器</span><button class="icon-btn share-page">↗</button></div>
+                <div class="audio-cover" id="listeningVideoStage"><img id="listeningPoster" alt="当前音频封面" loading="lazy" /><div class="cover-orbit"><i></i><span>AUDIO</span></div></div>
+                <div class="audio-meta"><span id="listeningTopic">YOUTUBE COURSE AUDIO</span><h2 id="listeningTrackTitle">正在读取课程</h2><p id="listeningTrackMeta">0 / 0</p></div>
+                <div class="audio-scrub"><div><i id="audioProgress"></i></div><span><b id="audioCurrent">00:00</b><b id="audioDuration">00:00</b></span></div>
+                <div class="audio-controls"><button id="playMode" title="列表循环">↻</button><button id="previousAudio">−1</button><button class="audio-play" id="audioPlay">▶</button><button id="nextAudio">+1</button><button id="speedButton">1.0×</button></div>
+                <div class="now-device"><span>♪</span><p><strong id="listeningSourceTitle">课程原声音轨</strong><small id="listeningSourceMeta">音乐播放器模式 · 歌词时间轴同步</small></p><button>⋮</button></div>
+              </article>
+
+              <article class="listening-lyrics card">
+                <div class="lyrics-toolbar stacked-mobile">
+                  <div class="segmented" id="lyricsLanguage"><button data-lang="en">英文</button><button data-lang="zh">中文</button><button data-lang="bi" class="active">双语</button></div>
+                  <label class="switch-label">高亮生词<input type="checkbox" id="highlightVocabulary" checked /><span class="switch"></span></label>
+                </div>
+                <div class="listening-lines" id="listeningLines"><div class="lyrics-empty"><span>CC</span><strong>正在读取对应字幕</strong><small>选择音频后会显示该视频已同步的真实字幕。</small></div></div>
+                <div class="timeline-adjust"><div><span>歌词整体偏移</span><strong id="timelineOffset">-0.2s</strong></div><input type="range" id="timelineRange" min="-20" max="20" value="-2" /><button class="text-btn" id="restoreTimeline">恢复默认</button></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- AI -->
+          <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
+            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>使用一个文本模型处理翻译、HTML/PPT 和口语练习建议；录音不发送给 AI。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
+            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">一个文本模型 · 浏览器语音识别</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
+
+            <div class="ai-layout">
+              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一配置能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>口语文字识别</strong><span class="active-model-name" data-model-role="browser">Web Speech API</span><span class="capability-status" data-capability="browserSpeech">浏览器检测</span></div><div><strong>内容翻译与练习建议</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
+
+              <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs" id="promptTabs"></div><label class="editor-label">System Prompt<textarea id="promptEditor"></textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{recognized_text}}</span><span>{{practice_metrics}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small id="promptVersion">本机模板 · 未修改</small></div><div class="button-row"><button class="text-btn" id="deletePrompt">删除</button><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
+            </div>
+          </section>
+
+          <!-- Settings -->
+          <section class="view" id="view-settings" data-title-zh="个人设置" data-title-en="Settings">
+            <div class="page-heading"><div><span class="eyebrow">ACCOUNT & PREFERENCES</span><h1>个人设置</h1><p>管理账号同步、公开资料、外观、语言、设备和隐私权限。</p></div><button class="primary-btn" id="authPreview">登录 / 注册</button></div>
+            <div class="settings-grid">
+              <article class="card account-settings"><div class="card-heading"><div><span class="eyebrow">ACCOUNT & SYNC</span><h3>账号与局域网同步</h3></div><span class="status warning" id="backendStatus">未连接</span></div><div class="account-service"><span class="service-mark">NAS</span><div><strong id="accountIdentity">离线学习模式</strong><small id="accountServiceMeta">本机数据正常可用；连接绿联 NAS 后可跨设备同步</small></div></div><div class="sync-state"><span id="syncStateIcon">↻</span><div><strong id="syncStateTitle">等待连接账号服务</strong><small id="syncStateMeta">学习记录仍会自动保存在当前设备</small></div></div><div class="button-row"><button class="secondary-btn" id="configureBackend">配置连接</button><button class="primary-btn" id="accountAction">登录 / 注册</button><button class="text-btn hidden" id="accountSignOut">退出登录</button></div></article>
+
+              <article class="card profile-settings"><div class="card-heading"><div><span class="eyebrow">PROFILE</span><h3>公开资料</h3></div><span class="status muted" id="profileStorageStatus">保存在当前设备</span></div><div class="avatar-editor"><button class="avatar avatar-a large" id="profileAvatar" type="button" aria-label="上传自定义头像">S</button><div><strong>选择默认头像</strong><div class="avatar-options"><button class="avatar avatar-a selected" data-avatar="S">S</button><button class="avatar avatar-b" data-avatar="🦊">🦊</button><button class="avatar avatar-c" data-avatar="🌿">🌿</button><button class="avatar avatar-d" data-avatar="🚀">🚀</button><button class="avatar avatar-e" data-avatar="A">A</button></div><button class="text-btn" id="uploadAvatar" type="button">上传自定义头像</button><input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden /></div></div><label>唯一昵称<div class="validated-input"><input id="nicknameInput" value="" maxlength="24" /><span id="nicknameStatus">本机可用</span></div></label><label>个性签名<textarea id="signatureInput" maxlength="160"></textarea><small><span id="signatureCount">0</span>/160</small></label><button class="primary-btn" id="saveProfile">保存资料</button></article>
+
+              <article class="card appearance-settings"><div class="card-heading"><div><span class="eyebrow">APPEARANCE</span><h3>外观主题</h3></div><span id="appearanceLabel">日间 · 经典紫</span></div><div class="settings-group"><strong>明暗模式</strong><div class="choice-cards mode-choices"><button class="active" data-mode-choice="light">☼<span>日间</span></button><button data-mode-choice="dark">☾<span>夜间</span></button><button data-mode-choice="system">◐<span>跟随系统</span></button></div></div><div class="settings-group"><strong>颜色主题</strong><div class="palette-row"><button class="palette violet active" data-theme-choice="violet" aria-label="经典紫"></button><button class="palette ocean" data-theme-choice="ocean" aria-label="海洋蓝"></button><button class="palette forest" data-theme-choice="forest" aria-label="森林绿"></button><button class="palette sunset" data-theme-choice="sunset" aria-label="日落橙"></button><button class="palette sakura" data-theme-choice="sakura" aria-label="樱花粉"></button></div></div><div class="settings-lines"><label><span><strong>减少动画</strong><small>降低过渡与庆祝动画</small></span><input id="reduceMotion" type="checkbox" /><i class="switch"></i></label><label><span><strong>高对比度</strong><small>提升文字和控件对比度</small></span><input id="highContrast" type="checkbox" /><i class="switch"></i></label></div></article>
+
+              <article class="card language-settings"><div class="card-heading"><div><span class="eyebrow">LANGUAGES</span><h3>语言设置</h3></div></div><div class="form-grid one"><label>网站界面<select id="siteLanguage"><option value="zh">简体中文</option><option value="en">English</option></select></label><label>学习语言<select><option>English</option><option>Español</option><option>日本語</option></select></label><label>英语学习辅助语言<select id="defaultDefinitionLanguage"><option value="zh">简体中文</option><option value="zhHant">繁體中文</option><option value="en">English</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="ar">العربية</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option><option value="vi">Tiếng Việt</option></select></label><label>目标口音<select><option>美式英语</option><option>英式英语</option></select></label></div></article>
+
+              <article class="card permission-settings"><div class="card-heading"><div><span class="eyebrow">PRIVACY & PERMISSIONS</span><h3>权限与设备</h3></div><button class="text-btn">查看全部 →</button></div><div class="permission-item"><span class="permission-icon">♩</span><div><strong>麦克风</strong><small id="micDeviceSummary">尚未检测设备</small></div><span class="status warning" id="micPermissionStatus">待检测</span><button class="secondary-btn compact" id="testMic">测试</button></div><div class="permission-item"><span class="permission-icon">♢</span><div><strong>通知</strong><small>复习与学习目标提醒</small></div><span class="status warning">未开启</span><button class="secondary-btn compact">开启</button></div><div class="permission-item"><span class="permission-icon">AI</span><div><strong>DeepSeek 学习反馈</strong><small>仅发送识别文字与本地指标，不上传录音</small></div><span class="status warning">待配置</span><button class="secondary-btn compact" data-view-link="ai">配置</button></div></article>
+            </div>
+          </section>
+        </div>
+
+        <nav class="mobile-nav" aria-label="移动端导航">
+          <button class="active" data-view-link="overview" aria-label="学习概览"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"/><path d="M9.5 20v-6h5v6"/></svg></span><small>概览</small></button>
+          <button data-view-link="practice" aria-label="视频学习"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7 8 5-8 5z"/></svg></span><small>学习</small></button>
+          <button data-view-link="vocabulary" aria-label="生词本"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><small>生词本</small></button>
+          <button data-view-link="listening" aria-label="磨耳朵"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><path d="M4 13h3v7H5.5A1.5 1.5 0 0 1 4 18.5zm16 0h-3v7h1.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg></span><small>磨耳朵</small></button>
+          <button data-view-link="settings" aria-label="更多设置"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.25"/><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/></svg></span><small>更多</small></button>
+        </nav>
+      </main>
+    </div>
+
+    <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+    <dialog class="modal" id="appModal">
+      <form method="dialog">
+        <div class="modal-head"><div><span class="eyebrow" id="modalEyebrow">NOTICE</span><h2 id="modalTitle">提示</h2></div><button class="icon-btn" value="cancel">×</button></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+      </form>
+    </dialog>
+
+    <script src="./runtime-config.js?v=45"></script>
+    <script src="./i18n.js?v=45"></script>
+    <script src="./backend.js?v=45"></script>
+    <script src="./app.js?v=45"></script>
+  </body>
+</html>
