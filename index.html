@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=43"></script>
-    <link rel="stylesheet" href="./styles.css?v=43" />
+    <script src="./boot.js?v=44"></script>
+    <link rel="stylesheet" href="./styles.css?v=44" />
   </head>
   <body>
     <div class="app-shell">
@@ -24,7 +24,6 @@
           <button class="nav-item" data-view-link="practice"><span>▶</span><b data-i18n="navPractice">视频学习</b></button>
           <button class="nav-item" data-view-link="vocabulary"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5A2.5 2.5 0 0 1 6 3h3a3 3 0 0 1 3 3v14a3 3 0 0 0-3-3H6a2.5 2.5 0 0 0-2.5 2.5z"/><path d="M20.5 5.5A2.5 2.5 0 0 0 18 3h-3a3 3 0 0 0-3 3v14a3 3 0 0 1 3-3h3a2.5 2.5 0 0 1 2.5 2.5z"/><path d="m6.2 13.5 1.3-4 1.3 4M6.7 12h1.6M15.5 10v4M13.5 12h4"/></svg></span><b data-i18n="navVocabulary">生词本</b><em class="hidden" id="navVocabularyCount">0</em></button>
           <button class="nav-item" data-view-link="listening"><span>♪</span><b data-i18n="navListening">磨耳朵</b></button>
-          <button class="nav-item" data-view-link="studio"><span>✦</span><b data-i18n="navStudio">内容工作台</b></button>
           <button class="nav-item" data-view-link="ai"><span>AI</span><b data-i18n="navAI">AI 服务</b></button>
         </nav>
 
@@ -265,18 +264,6 @@
             </div>
           </section>
 
-          <!-- Studio -->
-          <section class="view" id="view-studio" data-title-zh="内容工作台" data-title-en="Content studio">
-            <div class="page-heading"><div><span class="eyebrow">AI CONTENT STUDIO</span><h1>音频与 HTML PPT</h1><p>导入本地或在线纯音频，由 AI 生成可编辑、可同步的互动课件。</p></div><button class="secondary-btn">查看项目 12</button></div>
-            <div class="studio-grid">
-              <article class="card import-card"><div class="step-number">1</div><div class="card-heading"><div><span class="eyebrow">SOURCE</span><h3>导入纯音频</h3></div><span class="status success">授权检查开启</span></div><div class="upload-zone" id="uploadZone"><span>⇧</span><strong>拖放音频到这里</strong><p>MP3、M4A、WAV、OGG、FLAC · 在浏览器本地读取</p><button class="secondary-btn" id="chooseAudio" type="button">选择本地文件</button><input id="audioFileInput" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" hidden /></div><div class="or-divider"><span>或者导入授权的在线音频</span></div><div class="url-input"><input id="audioUrlInput" inputmode="url" placeholder="https://cdn.example.com/lesson.mp3" /><button class="primary-btn compact" id="inspectAudio">检查</button></div><div class="source-check hidden" id="sourceCheck"><span>✓</span><div><strong id="sourceCheckTitle">等待选择音频</strong><small id="sourceCheckMeta">尚未读取</small></div></div></article>
-
-              <article class="card ai-config"><div class="step-number">2</div><div class="card-heading"><div><span class="eyebrow">AI CONFIG</span><h3>生成配置</h3></div><button class="text-btn" data-view-link="ai">模型设置 →</button></div><div class="form-grid"><label>生成类型<select><option>逐句教学课件</option><option>内容摘要</option><option>词汇学习</option></select></label><label>页面比例<select><option>16:9</option><option>4:3</option><option>9:16</option></select></label><label>输出语言<select><option>中英双语</option><option>仅英文</option><option>仅中文</option></select></label><label>视觉主题<select><option>经典紫 · 日间</option><option>海洋蓝 · 夜间</option></select></label><label>预计页数<input value="8" /></label><label>动画强度<select><option>轻量</option><option>无动画</option><option>丰富</option></select></label></div><div class="checkbox-grid"><label><input type="checkbox" checked /> 自动同步音频</label><label><input type="checkbox" checked /> 包含重点词汇</label><label><input type="checkbox" checked /> 生成章节总结</label><label><input type="checkbox" /> 生成课后测验</label></div><button class="primary-btn full" id="generatePpt">✦ AI 生成 HTML PPT</button></article>
-
-              <article class="card slide-preview"><div class="step-number">3</div><div class="card-heading"><div><span class="eyebrow">LIVE PREVIEW</span><h3>课件预览</h3></div><div class="button-row"><button class="icon-btn">↶</button><button class="icon-btn">↷</button><button class="secondary-btn compact">保存草稿</button></div></div><div class="slide-canvas"><span class="slide-kicker">CHAPTER 03</span><h2>Build confidence<br /><em>one sentence at a time.</em></h2><p>建立自信，从认真练好每一句开始。</p><div class="slide-words"><span>practice</span><span>confidence</span><span>conversation</span></div><small>02:31.2 — 02:35.8</small></div><div class="slide-strip"><button>＋</button><button class="slide-mini"><span>01</span></button><button class="slide-mini active"><span>02</span></button><button class="slide-mini"><span>03</span></button><button class="slide-mini"><span>04</span></button></div></article>
-            </div>
-          </section>
-
           <!-- AI -->
           <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
             <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>一套配置管理文本与语音两条通道，可分别选择厂商和模型。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
@@ -326,9 +313,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=43"></script>
-    <script src="./i18n.js?v=43"></script>
-    <script src="./backend.js?v=43"></script>
-    <script src="./app.js?v=43"></script>
+    <script src="./runtime-config.js?v=44"></script>
+    <script src="./i18n.js?v=44"></script>
+    <script src="./backend.js?v=44"></script>
+    <script src="./app.js?v=44"></script>
   </body>
 </html>

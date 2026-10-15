@@ -27,7 +27,6 @@ const state = {
   recordingStartedAt: 0,
   recordingChunks: [],
   promptId: localStorage.getItem('shy-prompt-id') || 'encouraging',
-  studioSource: null,
   listeningPlaylistId: localStorage.getItem('shy-listening-playlist-id') || 'course-all',
   listeningTrackIndex: 0,
   listeningPlaybackToken: 0,
@@ -464,12 +463,12 @@ function openSkillReport() {
 
 const copy = {
   zh: {
-    navOverview: '学习概览', navPractice: '视频学习', navVocabulary: '生词本', navListening: '磨耳朵', navStudio: '内容工作台', navAI: 'AI 服务', navSettings: '设置',
-    overview: '学习概览', practice: '视频学习', vocabulary: '生词本', listening: '磨耳朵', studio: '内容工作台', ai: 'AI 服务', settings: '个人设置',
+    navOverview: '学习概览', navPractice: '视频学习', navVocabulary: '生词本', navListening: '磨耳朵', navAI: 'AI 服务', navSettings: '设置',
+    overview: '学习概览', practice: '视频学习', vocabulary: '生词本', listening: '磨耳朵', ai: 'AI 服务', settings: '个人设置',
   },
   en: {
-    navOverview: 'Overview', navPractice: 'Video practice', navVocabulary: 'Vocabulary', navListening: 'Listening', navStudio: 'Content studio', navAI: 'AI services', navSettings: 'Settings',
-    overview: 'Learning overview', practice: 'Video practice', vocabulary: 'Vocabulary', listening: 'Immersive listening', studio: 'Content studio', ai: 'AI services', settings: 'Settings',
+    navOverview: 'Overview', navPractice: 'Video practice', navVocabulary: 'Vocabulary', navListening: 'Listening', navAI: 'AI services', navSettings: 'Settings',
+    overview: 'Learning overview', practice: 'Video practice', vocabulary: 'Vocabulary', listening: 'Immersive listening', ai: 'AI services', settings: 'Settings',
   },
 };
 
@@ -753,7 +752,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=43', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=44', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1115,7 +1114,7 @@ function setupCatalogControls() {
 }
 
 const viewTitles = {
-  overview: ['学习概览', 'Learning overview'], practice: ['视频学习', 'Video practice'], vocabulary: ['生词本', 'Vocabulary'], listening: ['磨耳朵', 'Immersive listening'], studio: ['内容工作台', 'Content studio'], ai: ['AI 服务', 'AI services'], settings: ['个人设置', 'Settings'],
+  overview: ['学习概览', 'Learning overview'], practice: ['视频学习', 'Video practice'], vocabulary: ['生词本', 'Vocabulary'], listening: ['磨耳朵', 'Immersive listening'], ai: ['AI 服务', 'AI services'], settings: ['个人设置', 'Settings'],
 };
 
 function applyAppearance() {
@@ -1659,7 +1658,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=43', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=44', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }
@@ -2216,91 +2215,6 @@ function primaryProviderConfig(provider) {
   };
 }
 
-function readAudioMetadata(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file); const audio = new Audio();
-    const cleanup = () => URL.revokeObjectURL(url);
-    const timeout = setTimeout(() => { cleanup(); reject(new Error('读取音频信息超时。')); }, 10000);
-    audio.preload = 'metadata';
-    audio.onloadedmetadata = () => { clearTimeout(timeout); const duration = audio.duration; cleanup(); resolve({ duration }); };
-    audio.onerror = () => { clearTimeout(timeout); cleanup(); reject(new Error('浏览器无法读取这个音频格式。')); };
-    audio.src = url;
-  });
-}
-
-function showStudioSource(title, meta) {
-  $('#sourceCheckTitle').textContent = title; $('#sourceCheckMeta').textContent = meta; $('#sourceCheck').classList.remove('hidden');
-}
-
-async function acceptAudioFile(file) {
-  if (!file || (!file.type.startsWith('audio/') && !/\.(mp3|m4a|wav|ogg|flac)$/i.test(file.name))) { toast('请选择支持的纯音频文件。'); return; }
-  try {
-    const metadata = await readAudioMetadata(file);
-    state.studioSource = { type: 'file', file, duration: metadata.duration };
-    showStudioSource(file.name, `${formatDuration(metadata.duration)} · ${formatBytes(file.size)} · ${file.type || '音频文件'} · 本地读取`);
-    toast('已读取真实音频元数据，文件尚未上传。');
-  } catch (error) { toast(error.message); }
-}
-
-async function generateSlidesWithAI(file) {
-  const providers = readStoredJSON(STORAGE_KEYS.providers, {}); const provider = primaryProviderConfig(providers.primary || providers.openai);
-  const textKey = sessionStorage.getItem('shy-ai-key-text') || sessionStorage.getItem('shy-ai-key-primary') || sessionStorage.getItem('shy-ai-key-openai');
-  const speechKey = sessionStorage.getItem('shy-ai-key-speech-channel');
-  if (!provider?.lastTestOk || !textKey || !speechKey) throw new Error('请先在 AI 服务中完成文本与语音通道测试；API Key 只保存在当前标签页。');
-  const transcriptionBody = new FormData(); transcriptionBody.append('file', file); transcriptionBody.append('model', provider.speechModel);
-  const transcriptionResponse = await fetch(providerEndpoint(provider.speechBaseUrl, 'audio/transcriptions'), { method: 'POST', headers: { Authorization: `Bearer ${speechKey}` }, body: transcriptionBody });
-  if (!transcriptionResponse.ok) throw new Error(`音频转写失败：HTTP ${transcriptionResponse.status}`);
-  const transcription = await transcriptionResponse.json(); const transcript = transcription.text || '';
-  if (!transcript) throw new Error('转写服务没有返回文本。');
-  const prompt = `请把下面的英语音频转写整理为 6-10 页口语学习 HTML PPT 大纲。仅返回 JSON：{"slides":[{"title":"","body":"","keywords":[""]}]}。转写：${transcript.slice(0, 12000)}`;
-  const completionResponse = await fetch(providerEndpoint(provider.textBaseUrl, 'chat/completions'), { method: 'POST', headers: { Authorization: `Bearer ${textKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: provider.textModel, messages: [{ role: 'user', content: prompt }], temperature: .3 }) });
-  if (!completionResponse.ok) throw new Error(`课件生成失败：HTTP ${completionResponse.status}`);
-  const completion = await completionResponse.json(); const content = completion.choices?.[0]?.message?.content || '';
-  const parsed = JSON.parse(content.replace(/^```(?:json)?\s*|\s*```$/g, '')); if (!parsed.slides?.length) throw new Error('模型返回的课件结构无效。');
-  return { transcript, slides: parsed.slides };
-}
-
-function renderGeneratedSlide(slide, count) {
-  const canvas = $('.slide-canvas');
-  $('.slide-kicker', canvas).textContent = `AI GENERATED · ${count} SLIDES`;
-  $('h2', canvas).textContent = slide.title || 'Generated lesson';
-  $('p', canvas).textContent = slide.body || '';
-  const words = $('.slide-words', canvas); words.replaceChildren(...(slide.keywords || []).slice(0, 4).map((word) => { const span = document.createElement('span'); span.textContent = word; return span; }));
-}
-
-function setupStudio() {
-  $('#chooseAudio').addEventListener('click', () => $('#audioFileInput').click());
-  $('#audioFileInput').addEventListener('change', (event) => acceptAudioFile(event.target.files[0]));
-  const zone = $('#uploadZone');
-  ['dragenter', 'dragover'].forEach((type) => zone.addEventListener(type, (event) => { event.preventDefault(); zone.classList.add('dragging'); }));
-  ['dragleave', 'drop'].forEach((type) => zone.addEventListener(type, (event) => { event.preventDefault(); zone.classList.remove('dragging'); }));
-  zone.addEventListener('drop', (event) => acceptAudioFile(event.dataTransfer.files[0]));
-  $('#inspectAudio').addEventListener('click', async () => {
-    const value = $('#audioUrlInput').value.trim(); let url;
-    try { url = new URL(value); if (url.protocol !== 'https:') throw new Error(); }
-    catch { toast('请输入有效的 HTTPS 音频地址。'); return; }
-    const button = $('#inspectAudio'); button.disabled = true; button.textContent = '检查中…';
-    try {
-      const response = await fetch(url, { method: 'HEAD' }); if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const type = response.headers.get('content-type') || '未知格式'; const bytes = Number(response.headers.get('content-length') || 0);
-      state.studioSource = { type: 'url', url: url.href, contentType: type, bytes };
-      showStudioSource(url.pathname.split('/').pop() || url.hostname, `${type} · ${bytes ? formatBytes(bytes) : '大小未知'} · 已完成真实 HEAD 请求`);
-      toast('在线音频地址检查通过。');
-    } catch (error) { toast(`在线音频检查失败：${error.message}。来源需要允许跨域 HEAD 请求。`); }
-    finally { button.disabled = false; button.textContent = '检查'; }
-  });
-  $('#generatePpt').addEventListener('click', async () => {
-    if (!state.studioSource) { toast('请先选择本地音频或检查在线音频。'); return; }
-    if (state.studioSource.type !== 'file') { toast('当前真实 AI 流程仅支持本地音频文件；在线来源需先由服务端安全拉取。'); return; }
-    const button = $('#generatePpt'); button.disabled = true; button.textContent = '✦ 正在转写并生成课件…';
-    try {
-      const result = await generateSlidesWithAI(state.studioSource.file); renderGeneratedSlide(result.slides[0], result.slides.length);
-      button.textContent = `✓ 已生成 ${result.slides.length} 页 · 查看预览`; toast('真实 AI 转写与 HTML PPT 大纲生成完成。');
-    } catch (error) { toast(error.message); button.textContent = '✦ AI 生成 HTML PPT'; }
-    finally { button.disabled = false; }
-  });
-}
-
 function updateProviderCards() {
   const providers = readStoredJSON(STORAGE_KEYS.providers, {});
   const provider = primaryProviderConfig(providers.primary || providers.openai);
@@ -2728,7 +2642,7 @@ async function init() {
   state.authSession = account.session || null;
   setupNavigation(); setupGlobalControls(); setupHoverToasts(); setupNotifications();
   await loadCatalog();
-  setupCatalogControls(); setupPractice(); await setupVocabulary(); setupListening(); setupStudio(); setupAI(); setupSettings(); setupPWA();
+  setupCatalogControls(); setupPractice(); await setupVocabulary(); setupListening(); setupAI(); setupSettings(); setupPWA();
   state.accountReady = true; updateProfileChrome(); updateAccountUI();
   shyBackend.onAuthChange((session) => { state.authSession = session; updateAccountUI(); });
   if (state.authSession) await completeAuthenticatedSession(state.authSession).catch((error) => setSyncMessage('NAS 同步暂时不可用', `${friendlyAccountError(error)} · 本机数据未受影响`));
