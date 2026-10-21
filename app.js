@@ -755,7 +755,7 @@ async function loadCatalog() {
       } finally { clearTimeout(timeout); }
     }
     if (!catalog) {
-      const response = await fetch('./data/catalog.json?v=45', { cache: 'no-cache' });
+      const response = await fetch('./data/catalog.json?v=46', { cache: 'no-cache' });
       if (!response.ok) throw new Error(`Catalog HTTP ${response.status}`);
       catalog = await response.json();
       const storedCatalog = readStoredJSON(STORAGE_KEYS.catalog, null);
@@ -1613,11 +1613,88 @@ function renderPracticeScore(score) {
   });
   const words = $('.word-scores'); words.replaceChildren();
   const fallbackWords = (currentSentence()?.en || '').replace(/[^A-Za-z' -]/g, '').split(/\s+/).filter(Boolean);
-  const items = score.words.length ? score.words : fallbackWords.map((word) => ({ word, score: score.pronunciation }));
+  const scoredWords = Array.isArray(score.words) ? score.words : [];
+  const items = scoredWords.length ? scoredWords : fallbackWords.map((word) => ({ word, score: score.pronunciation }));
   items.forEach((item) => { const span = document.createElement('span'); span.textContent = item.word || item.text || ''; span.className = Number(item.score ?? item.accuracy ?? 100) >= 75 ? 'good' : 'warn'; words.append(span); });
   $('.score-feedback').textContent = score.feedback || '已根据浏览器识别文字、语速与停顿生成练习评分。';
   $('#scoreDataStatus').textContent = score.feedbackGenerated ? 'DeepSeek 练习反馈' : '本地练习评分'; $('#scoreDataStatus').className = 'status success';
   renderScoreHistory();
+}
+
+function currentPracticeScore() {
+  if (!state.sentenceId) return null;
+  return (analytics.ensure('sentences', `${state.topicId}:${state.chapterId}:${state.sentenceId}`).scores || []).at(-1) || null;
+}
+
+function practiceMetric(value, formatter = (item) => item) {
+  const number = Number(value);
+  return Number.isFinite(number) ? formatter(number) : '—';
+}
+
+function openPracticeScoreDetails() {
+  const english = state.language === 'en';
+  const score = currentPracticeScore();
+  const sentence = currentSentence();
+  const closeLabel = english ? 'Close' : '关闭';
+  const retryLabel = english ? 'Practice again' : '再练一次';
+  const focusRecorder = () => {
+    const button = $('#recordButton');
+    button?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    button?.focus({ preventScroll: true });
+  };
+  if (!score) {
+    showModal({
+      eyebrow: 'PRACTICE SCORE',
+      title: english ? 'Practice score details' : '练习评分详情',
+      body: `<div class="practice-score-empty"><span>◉</span><div><strong>${english ? 'No score for this sentence yet' : '当前句子还没有评分'}</strong><p>${english ? 'Record the current sentence first. Once speech recognition finishes, the transcript, word matching, pace, pauses, volume stability, and feedback will appear here.' : '请先完成当前句子的录音。语音识别结束后，这里会显示识别文字、逐词匹配、语速、停顿、音量稳定性和反馈。'}</p></div></div>`,
+      actions: [{ label: closeLabel }, { label: english ? 'Start recording' : '开始录音', style: 'primary', onClick: focusRecorder }],
+    });
+    return;
+  }
+
+  const metrics = score.metrics || {};
+  const total = practiceMetric(score.total, Math.round);
+  const contentAccuracy = practiceMetric(score.accuracy ?? score.pronunciation, Math.round);
+  const fluency = practiceMetric(score.fluency, Math.round);
+  const completeness = practiceMetric(score.completeness, Math.round);
+  const referenceText = sentence?.en || (english ? 'Reference sentence unavailable' : '参考句暂不可用');
+  const recognizedText = score.recognizedText || (english ? 'The recognized transcript was not saved with this earlier score.' : '这条较早的评分没有保存浏览器识别文字。');
+  const feedback = score.feedback || (english ? 'No detailed feedback was saved with this score.' : '这条评分没有保存详细建议。');
+  const scoreWords = Array.isArray(score.words) ? score.words : [];
+  const fallbackWords = referenceText.replace(/[^A-Za-z' -]/g, '').split(/\s+/).filter(Boolean);
+  const wordItems = scoreWords.length ? scoreWords : fallbackWords.map((word) => ({ word, score: score.pronunciation ?? score.total }));
+  const wordHTML = wordItems.length
+    ? wordItems.map((item) => {
+      const value = Number(item.score ?? item.accuracy ?? score.total ?? 0);
+      return `<span class="${value >= 75 ? 'good' : 'warn'}"><b>${escapeHTML(item.word || item.text || '')}</b><small>${Number.isFinite(value) ? Math.round(value) : '—'}</small></span>`;
+    }).join('')
+    : `<span class="muted">${english ? 'No word-level matching data' : '没有逐词匹配数据'}</span>`;
+  const method = score.scoringMethod === 'browser-speech-local-metrics'
+    ? (english ? `Browser recognition + local metrics${score.feedbackGenerated ? ' + DeepSeek text feedback' : ''}` : `浏览器识别 + 本地指标${score.feedbackGenerated ? ' + DeepSeek 文本建议' : ''}`)
+    : (english ? 'Legacy synchronized score' : '旧版同步评分记录');
+  const metricCards = [
+    [english ? 'Content accuracy' : '内容准确度', contentAccuracy],
+    [english ? 'Fluency' : '流利度', fluency],
+    [english ? 'Completeness' : '完整度', completeness],
+    [english ? 'Pace' : '语速', practiceMetric(metrics.wordsPerMinute, (value) => `${Math.round(value)} WPM`)],
+    [english ? 'Pauses' : '停顿占比', practiceMetric(metrics.silenceRatio, (value) => `${Math.round(value * 100)}%`)],
+    [english ? 'Volume stability' : '音量稳定性', practiceMetric(metrics.volumeStability, (value) => `${Math.round(value)}/100`)],
+    [english ? 'Recognition confidence' : '识别置信度', practiceMetric(metrics.recognitionConfidence, (value) => `${Math.round(value * 100)}%`)],
+    [english ? 'Recording length' : '录音时长', practiceMetric(metrics.durationSeconds, (value) => `${value.toFixed(1)} s`)],
+  ].map(([label, value]) => `<div><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></div>`).join('');
+
+  showModal({
+    eyebrow: 'PRACTICE SCORE',
+    title: english ? 'Practice score details' : '练习评分详情',
+    body: `<div class="practice-score-detail">
+      <section class="practice-score-summary"><div class="practice-score-value"><strong>${escapeHTML(total)}</strong><span>${english ? 'Overall score' : '综合评分'}</span></div><div class="practice-score-copy"><div><span>${english ? 'REFERENCE' : '参考原句'}</span><strong>${escapeHTML(referenceText)}</strong></div><div><span>${english ? 'RECOGNIZED' : '识别文字'}</span><strong>${escapeHTML(recognizedText)}</strong></div></div></section>
+      <section><div class="practice-score-section-title"><strong>${english ? 'Practice metrics' : '练习指标'}</strong><small>${escapeHTML(method)}</small></div><div class="practice-score-metrics">${metricCards}</div></section>
+      <section><div class="practice-score-section-title"><strong>${english ? 'Word matching' : '逐词匹配'}</strong><small>${english ? '75+ is shown in green' : '75 分及以上显示为绿色'}</small></div><div class="practice-score-words">${wordHTML}</div></section>
+      <section class="practice-score-advice"><span>AI</span><div><strong>${english ? 'Practice suggestion' : '练习建议'}</strong><p>${escapeHTML(feedback)}</p></div></section>
+      <p class="practice-score-note">${english ? 'This is a practice score based on the recognized transcript, pace, pauses, and volume. It does not analyze phonemes, stress, or accent. The recording itself is not uploaded to DeepSeek.' : '这是基于识别文字、语速、停顿和音量生成的练习评分，不分析音素、重音或口音；录音本身不会上传到 DeepSeek。'}</p>
+    </div>`,
+    actions: [{ label: closeLabel }, { label: retryLabel, style: 'primary', onClick: focusRecorder }],
+  });
 }
 
 function renderScoreHistory() {
@@ -1681,6 +1758,7 @@ function setupPractice() {
   }
   bindPracticeLines();
   $('#recordButton').addEventListener('click', () => state.mediaRecorder?.state === 'recording' ? stopRecording() : startRecording());
+  $('#scoreDetailsButton').addEventListener('click', openPracticeScoreDetails);
   $('#micDeviceButton').addEventListener('click', async () => {
     let info;
     try { info = await getMicrophoneInfo(); }
@@ -1792,7 +1870,7 @@ async function loadVocabulary() {
   }
   if (!vocabulary) {
     try {
-      const response = await fetch('./data/vocabulary.json?v=45', { cache: 'no-cache' });
+      const response = await fetch('./data/vocabulary.json?v=46', { cache: 'no-cache' });
       if (response.ok) vocabulary = await response.json();
     } catch { /* Local cache below keeps the vocabulary usable offline. */ }
   }

@@ -48,7 +48,7 @@ const cloudState = {
     analytics: {
       version: 1, updatedAt: '2099-10-11T00:00:00Z', events: [], days: {}, topics: {}, chapters: {},
       views: { practice: { practiceSeconds: 600, practiceCount: 1, recordings: 0, scores: [], lastPracticedAt: '2099-10-11T00:00:00Z' } },
-      sentences: { 'youtube-vfe7ap1kfk0:chapter-01:sentence-01': { practiceSeconds: 30, practiceCount: 2, recordings: 1, lastPracticedAt: '2099-10-11T00:00:00Z', scores: [{ total: 91, pronunciation: 92, fluency: 89, completeness: 93, words: [], createdAt: '2099-10-11T00:00:00Z' }] } },
+      sentences: { 'youtube-vfe7ap1kfk0:chapter-01:sentence-001': { practiceSeconds: 30, practiceCount: 2, recordings: 1, lastPracticedAt: '2099-10-11T00:00:00Z', scores: [{ total: 91, pronunciation: 92, accuracy: 92, fluency: 89, completeness: 93, words: [{ word: 'Welcome', score: 98 }, { word: 'verified', score: 84 }, { word: 'lesson', score: 72 }], recognizedText: 'Welcome back to this verified test lesson', metrics: { durationSeconds: 3.5, wordsPerMinute: 103, silenceRatio: 0.12, volumeStability: 88, recognitionConfidence: 0.94 }, feedback: 'Keep your pace steady.', feedbackGenerated: true, scoringMethod: 'browser-speech-local-metrics', createdAt: '2099-10-11T00:00:00Z' }] } },
     },
     profile: { nickname: 'CloudSnapshot', signature: '', avatar: 'S' }, customTopics: [], prompts: null,
     preferences: { mode: 'light', theme: 'forest', language: 'zh', definitionLanguage: 'zh' },
@@ -193,6 +193,10 @@ async function main() {
 
   await page.locator('.chapter').nth(1).click();
   assert.ok((await page.locator('.lyrics-empty').textContent()).includes('尚未同步'), 'chapter without transcript should show an honest empty state');
+  await page.click('#scoreDetailsButton');
+  assert.equal(await page.locator('#modalTitle').textContent(), '练习评分详情', 'practice score details should open instead of doing nothing');
+  assert.ok((await page.locator('#modalBody').textContent()).includes('当前句子还没有评分'), 'practice score details should explain the empty state honestly');
+  await page.locator('#modalActions .secondary-btn').click();
 
   assert.equal(await page.locator('#view-downloads').count(), 0, 'offline content view should be removed');
   assert.equal(await page.locator('[data-view-link="downloads"]').count(), 0, 'offline content navigation should be removed');
@@ -265,6 +269,19 @@ async function main() {
   assert.equal(await page.locator('[data-report-state="scored"]').count(), 1, 'skill report button should open a report backed by recorded practice scores');
   assert.equal(await page.locator('#skillReportScoreCount').textContent(), '1 次练习评分', 'skill report should expose the recorded practice-score count');
   assert.ok((await page.locator('#modalBody').textContent()).includes('91'), 'skill report should display the synchronized real score');
+  await page.locator('#modalActions .secondary-btn').click();
+
+  await page.evaluate(() => window.navigate('practice'));
+  await page.selectOption('#topicSelect', { index: 0 });
+  await page.locator('.chapter').first().click();
+  await page.locator('.lyric-line').first().click();
+  await page.click('#scoreDetailsButton');
+  assert.equal(await page.locator('#modalTitle').textContent(), '练习评分详情', 'saved sentence scores should open a detailed result dialog');
+  const scoreDetails = await page.locator('#modalBody').textContent();
+  assert.ok(scoreDetails.includes('Welcome back to this verified test lesson.'), 'score details should show the reference sentence');
+  assert.ok(scoreDetails.includes('103 WPM') && scoreDetails.includes('12%') && scoreDetails.includes('88/100'), 'score details should show pace, pauses, and volume stability');
+  assert.ok(scoreDetails.includes('Keep your pace steady.'), 'score details should show the saved practice feedback');
+  assert.ok(scoreDetails.includes('录音本身不会上传到 DeepSeek'), 'score details should accurately explain the scoring boundary');
   await page.locator('#modalActions .secondary-btn').click();
 
   await page.evaluate(() => window.navigate('vocabulary'));
