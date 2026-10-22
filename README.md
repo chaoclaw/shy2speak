@@ -82,7 +82,7 @@ docker compose -f compose.ugreen.yml exec -T database pg_dump -U shy2speak shy2s
 - 视频学习使用 `youtube-nocookie.com` 官方嵌入播放器。磨耳朵的低流量模式只为已配置课程临时代理音频字节，不写入磁盘、不建立公共下载链接；部署者应确保对所配置内容拥有必要权限并遵守来源平台条款。
 - 低流量音频优先使用 Unlicense 许可的 `yt-dlp` 2026.08.19（构建时校验官方 SHA-256），再回退到 MIT 许可的 `youtubei.js`。播放列表发现使用 `youtubei.js`，并以同样为 MIT 许可的 `youtube-search-api` 作为备用；公开字幕读取使用 MIT 许可的 `youtube-caption-extractor`。YouTube 仅提供繁体中文翻译时，服务端使用 MIT/Apache-2.0 许可的纯 JavaScript `opencc-js` 转换为简体中文。这些解析器使用非官方接口，来源平台变化时可能需要随版本更新。
 - `data/catalog.json` 保存课程结构。逐句稿会标记来源；未获得公开视频字幕时仍显示“待核对”，不会冒充准确字幕。
-- 麦克风录音使用浏览器 `MediaRecorder`，口语文字由 Web Speech API 识别；文字匹配、完整度、语速、停顿和音量稳定性在本地计算为“练习评分”。配置 DeepSeek-compatible 文本模型后，仅发送识别文字与指标生成建议，不向该 AI 服务上传录音，也不宣称提供音素、重音或口音评分。
+- 默认口语方案使用浏览器 `MediaRecorder` + Web Speech API；文字匹配、完整度、语速、停顿和音量稳定性在本地计算为“练习评分”，录音不上传。也可在 AI 页面切换到讯飞 ISE 或 SpeechSuper 专业发音评测：浏览器把当前句转换为 16 kHz PCM WAV，经 NAS 代理发送给所选厂商，厂商凭证仅保存在当前标签页。DeepSeek-compatible 文本模型始终只接收识别文字与评分结果来生成建议，不接收录音。
 - AI Key 只保存在当前浏览器标签页；生产环境后续可把指定厂商调用迁移到 NAS API 代理。
 - GitHub Pages 仅作为离线 UI 预览；完整注册登录与同步请使用 Docker 地址。
 

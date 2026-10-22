@@ -201,6 +201,14 @@
     return request('/vocabulary/delete-everywhere', { method: 'POST', accessToken: active.access_token, body: { word_ids: wordIds } });
   }
 
+  async function testSpeechProvider(provider, credentials) {
+    return request('/speech/test', { method: 'POST', body: { provider, credentials } });
+  }
+
+  async function scoreSpeech({ provider, credentials, referenceText, audioBase64 }) {
+    return request('/speech/score', { method: 'POST', body: { provider, credentials, referenceText, audioBase64 } });
+  }
+
   async function initialize() {
     if (session && Number(session.expires_at || 0) <= Math.floor(Date.now() / 1000) + 60) {
       try { await refreshSession(); }
@@ -219,5 +227,6 @@
     signInPassword, signUp, sendOtp, verifyOtp, recoverPassword, resetPasswordWithCode,
     updatePassword, refreshSession, signOut, getUser, getProfile, saveProfile,
     checkNickname, pushLearningState, pullLearningState, getVocabulary, deleteVocabularyEverywhere,
+    testSpeechProvider, scoreSpeech,
   });
 })();

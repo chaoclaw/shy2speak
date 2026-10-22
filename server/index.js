@@ -51,6 +51,11 @@ const mailer = smtpEnabled ? nodemailer.createTransport({
   auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD || '' } : undefined,
 }) : null;
 
+const SPEECH_PROVIDERS = Object.freeze({
+  xfyun: { host: 'ise-api.xfyun.cn', path: '/v2/open-ise' },
+  speechsuper: { endpoint: 'https://api.speechsuper.com/' },
+});
+
 class HttpError extends Error {
   constructor(status, message, code = 'request_error') {
     super(message);
@@ -61,6 +66,187 @@ class HttpError extends Error {
 
 function asyncRoute(handler) {
   return (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next);
+}
+
+function speechCredential(value, label) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.length > 256 || /[\r\n]/.test(normalized)) throw new HttpError(400, `请填写有效的${label}。`, 'invalid_speech_credentials');
+  return normalized;
+}
+
+function speechProviderCredentials(provider, input = {}) {
+  if (provider === 'xfyun') return {
+    appId: speechCredential(input.appId, '讯飞 App ID'),
+    apiKey: speechCredential(input.apiKey, '讯飞 API Key'),
+    apiSecret: speechCredential(input.apiSecret, '讯飞 API Secret'),
+  };
+  if (provider === 'speechsuper') return {
+    appKey: speechCredential(input.appKey, 'SpeechSuper App Key'),
+    secretKey: speechCredential(input.secretKey, 'SpeechSuper Secret Key'),
+    userId: String(input.userId || 'shy2speak-user').trim().slice(0, 128) || 'shy2speak-user',
+  };
+  throw new HttpError(400, '不支持的口语评分服务。', 'unsupported_speech_provider');
+}
+
+function silentWave(seconds = 0.8) {
+  const sampleRate = 16000; const samples = Math.round(sampleRate * seconds); const buffer = Buffer.alloc(44 + samples * 2);
+  buffer.write('RIFF', 0); buffer.writeUInt32LE(36 + samples * 2, 4); buffer.write('WAVEfmt ', 8); buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22); buffer.writeUInt32LE(sampleRate, 24); buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34); buffer.write('data', 36); buffer.writeUInt32LE(samples * 2, 40);
+  return buffer;
+}
+
+function decodeSpeechWave(value) {
+  if (typeof value !== 'string' || value.length > 5_600_000 || !/^[A-Za-z0-9+/=]+$/.test(value)) throw new HttpError(400, '录音数据无效或超过限制。', 'invalid_speech_audio');
+  const wave = Buffer.from(value, 'base64');
+  if (wave.length < 44 || wave.subarray(0, 4).toString() !== 'RIFF' || wave.subarray(8, 12).toString() !== 'WAVE') throw new HttpError(400, '口语评分需要 16 kHz 单声道 WAV 录音。', 'invalid_speech_audio');
+  let offset = 12; let format; let pcm;
+  while (offset + 8 <= wave.length) {
+    const id = wave.subarray(offset, offset + 4).toString(); const size = wave.readUInt32LE(offset + 4); const start = offset + 8;
+    if (start + size > wave.length) break;
+    if (id === 'fmt ') format = { encoding: wave.readUInt16LE(start), channels: wave.readUInt16LE(start + 2), sampleRate: wave.readUInt32LE(start + 4), bits: wave.readUInt16LE(start + 14) };
+    if (id === 'data') pcm = wave.subarray(start, start + size);
+    offset = start + size + (size % 2);
+  }
+  if (!pcm?.length || format?.encoding !== 1 || format.channels !== 1 || format.sampleRate !== 16000 || format.bits !== 16) throw new HttpError(400, '录音格式必须为 16 kHz、16-bit、单声道 PCM WAV。', 'invalid_speech_audio');
+  return { wave, pcm };
+}
+
+function scoreNumber(value, fallback = null) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(number <= 5 ? number * 20 : number)));
+}
+
+function xmlAttributes(value = '') {
+  const attributes = {};
+  String(value).replace(/([\w:-]+)=(?:"([^"]*)"|'([^']*)')/g, (_match, key, double, single) => { attributes[key] = double ?? single ?? ''; return ''; });
+  return attributes;
+}
+
+function normalizeXfyunScore(xml) {
+  const nodes = [...String(xml || '').matchAll(/<(?:rec_paper|read_sentence|sentence|word)\b([^>]*)>/gi)].map((match) => xmlAttributes(match[1]));
+  const root = nodes.find((item) => item.total_score || item.totalScore) || {};
+  const words = [...String(xml || '').matchAll(/<word\b([^>]*)>/gi)].map((match) => {
+    const item = xmlAttributes(match[1]);
+    return { word: item.content || item.word || '', score: scoreNumber(item.total_score ?? item.phone_score ?? item.score, 0) };
+  }).filter((item) => item.word);
+  const total = scoreNumber(root.total_score ?? root.totalScore ?? root.score);
+  if (total === null) throw new Error('讯飞返回了结果，但没有可读取的评分。');
+  return {
+    provider: 'xfyun', total,
+    pronunciation: scoreNumber(root.phone_score ?? root.standard_score ?? root.pron_score, total),
+    accuracy: scoreNumber(root.phone_score ?? root.standard_score ?? root.pron_score, total),
+    fluency: scoreNumber(root.fluency_score ?? root.fluency, total),
+    completeness: scoreNumber(root.integrity_score ?? root.integrity ?? root.completeness, total),
+    words,
+  };
+}
+
+function findScoreValue(object, names) {
+  if (!object || typeof object !== 'object') return null;
+  for (const name of names) if (object[name] !== undefined) { const value = scoreNumber(object[name]); if (value !== null) return value; }
+  for (const value of Object.values(object)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) { const found = findScoreValue(value, names); if (found !== null) return found; }
+  }
+  return null;
+}
+
+function findWordScores(object) {
+  if (!object || typeof object !== 'object') return [];
+  for (const [key, value] of Object.entries(object)) {
+    if (Array.isArray(value) && /word/i.test(key)) return value.map((item) => ({
+      word: String(item?.word || item?.text || item?.content || item?.name || ''),
+      score: findScoreValue(item, ['overall', 'overallScore', 'score', 'pronunciation', 'pronScore']) ?? 0,
+    })).filter((item) => item.word);
+  }
+  for (const value of Object.values(object)) { const found = findWordScores(value); if (found.length) return found; }
+  return [];
+}
+
+function normalizeSpeechSuperScore(payload) {
+  const source = payload?.result || payload?.data || payload;
+  const total = findScoreValue(source, ['overall', 'overallScore', 'totalScore', 'total_score', 'score']);
+  if (total === null) throw new Error('SpeechSuper 返回了结果，但没有可读取的评分。');
+  return {
+    provider: 'speechsuper', total,
+    pronunciation: findScoreValue(source, ['pronunciation', 'pronunciationScore', 'pronScore', 'phoneScore']) ?? total,
+    accuracy: findScoreValue(source, ['accuracy', 'accuracyScore', 'pronunciation', 'pronScore']) ?? total,
+    fluency: findScoreValue(source, ['fluency', 'fluencyScore']) ?? total,
+    completeness: findScoreValue(source, ['completeness', 'completenessScore', 'integrity', 'integrityScore']) ?? total,
+    words: findWordScores(source),
+  };
+}
+
+function xfyunAuthorizedUrl({ apiKey, apiSecret }) {
+  const { host, path: requestPath } = SPEECH_PROVIDERS.xfyun; const date = new Date().toUTCString();
+  const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${requestPath} HTTP/1.1`;
+  const signature = crypto.createHmac('sha256', apiSecret).update(signatureOrigin).digest('base64');
+  const authorization = Buffer.from(`api_key="${apiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signature}"`).toString('base64');
+  const query = new URLSearchParams({ authorization, date, host });
+  return `wss://${host}${requestPath}?${query}`;
+}
+
+async function requestXfyunScore(credentials, referenceText, pcm, { testOnly = false } = {}) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(xfyunAuthorizedUrl(credentials)); let settled = false; let xml = ''; let audioOffset = 0; let timer;
+    const finish = (error, value) => {
+      if (settled) return; settled = true; clearTimeout(timer); try { socket.close(); } catch { /* already closed */ }
+      if (error) reject(error); else resolve(value);
+    };
+    timer = setTimeout(() => finish(new Error('讯飞口语评测连接超时。')), 60_000);
+    socket.addEventListener('open', () => {
+      socket.send(JSON.stringify({
+        common: { app_id: credentials.appId },
+        business: { category: 'read_sentence', rstcd: 'utf8', group: 'adult', sub: 'ise', ent: 'en_vip', tte: 'utf-8', cmd: 'ssb', auf: 'audio/L16;rate=16000', aue: 'raw', text: `\uFEFF${referenceText}` },
+        data: { status: 0 },
+      }));
+      const sendAudio = () => {
+        if (settled || socket.readyState !== WebSocket.OPEN) return;
+        const end = Math.min(audioOffset + 1280, pcm.length); const last = end >= pcm.length; const chunk = pcm.subarray(audioOffset, end);
+        socket.send(JSON.stringify({ business: { cmd: 'auw', aus: last ? 4 : (audioOffset ? 2 : 1) }, data: { status: last ? 2 : 1, data: chunk.toString('base64') } }));
+        audioOffset = end;
+        if (!last) setTimeout(sendAudio, 40);
+      };
+      setTimeout(sendAudio, 40);
+    });
+    socket.addEventListener('message', (event) => {
+      let payload;
+      try { payload = JSON.parse(String(event.data)); } catch { return; }
+      if (Number(payload.code || 0) !== 0) return finish(new Error(`讯飞口语评测失败：${payload.message || `错误码 ${payload.code}`}`));
+      if (payload.data?.data) xml += Buffer.from(payload.data.data, 'base64').toString('utf8');
+      if (Number(payload.data?.status) === 2) {
+        if (testOnly && !xml) return finish(null, { connected: true });
+        try { finish(null, normalizeXfyunScore(xml)); } catch (error) { if (testOnly) finish(null, { connected: true }); else finish(error); }
+      }
+    });
+    socket.addEventListener('error', () => finish(new Error('无法连接讯飞口语评测服务。')));
+    socket.addEventListener('close', () => { if (!settled) finish(new Error('讯飞口语评测连接已提前关闭。')); });
+  });
+}
+
+async function requestSpeechSuperScore(credentials, referenceText, wave, { testOnly = false } = {}) {
+  const timestamp = Math.floor(Date.now() / 1000); const signature = crypto.createHash('md5').update(`${credentials.appKey}${timestamp}${credentials.secretKey}`).digest('hex');
+  const requestPayload = {
+    connect: { cmd: 'connect', param: { sdk: { version: 16777472, source: 9, protocol: 2 }, app: { applicationId: credentials.appKey, sig: signature, timestamp } } },
+    start: { cmd: 'start', param: { app: { userId: credentials.userId }, audio: { audioType: 'wav', channel: 1, sampleBytes: 2, sampleRate: 16000 }, request: { coreType: 'sent.eval', refText: referenceText, rank: 100 } } },
+  };
+  const form = new FormData(); form.append('text', JSON.stringify(requestPayload)); form.append('audio', new Blob([wave], { type: 'audio/wav' }), 'practice.wav');
+  const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const upstream = await fetch(SPEECH_PROVIDERS.speechsuper.endpoint, { method: 'POST', body: form, signal: controller.signal });
+    const text = await upstream.text(); let payload;
+    try { payload = JSON.parse(text); } catch { throw new Error(`SpeechSuper 返回了无效响应（HTTP ${upstream.status}）。`); }
+    if (!upstream.ok) throw new Error(`SpeechSuper 连接失败：HTTP ${upstream.status}`);
+    const errorMessage = payload?.error?.message || payload?.error || payload?.message;
+    const errorCode = payload?.error?.code ?? payload?.errId ?? payload?.code;
+    if (errorMessage && ![0, '0', undefined, null].includes(errorCode)) throw new Error(`SpeechSuper 评测失败：${String(errorMessage)}`);
+    if (testOnly) return { connected: true };
+    return normalizeSpeechSuperScore(payload);
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('SpeechSuper 口语评测连接超时。');
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 
 function base64url(value) {
@@ -563,7 +749,7 @@ async function migrate() {
 const app = express();
 if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
 app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '6mb' }));
 app.use((request, response, next) => {
   response.set({
     'X-Content-Type-Options': 'nosniff',
@@ -588,11 +774,45 @@ app.get('/api/health', asyncRoute(async (_request, response) => {
   response.json({
     ok: true,
     service: 'shy2speak-self-hosted',
-    release: 'v46',
+    release: 'v47',
     database: 'postgresql',
     audio: { primaryResolver: 'yt-dlp', fallbackResolver: 'youtubei.js' },
     auth: { email: true, phone: true, emailOtp: smtpEnabled, phoneOtp: smsEnabled, passwordRecovery: smtpEnabled },
   });
+}));
+
+const speechLimiter = rateLimit(60 * 1000, 12);
+
+app.post('/api/speech/test', speechLimiter, asyncRoute(async (request, response) => {
+  const provider = String(request.body?.provider || '');
+  const credentials = speechProviderCredentials(provider, request.body?.credentials);
+  try {
+    const wave = silentWave();
+    const result = provider === 'xfyun'
+      ? await requestXfyunScore(credentials, 'Hello.', decodeSpeechWave(wave.toString('base64')).pcm, { testOnly: true })
+      : await requestSpeechSuperScore(credentials, 'Hello.', wave, { testOnly: true });
+    response.set('Cache-Control', 'no-store');
+    response.json({ ok: true, provider, connected: result.connected === true });
+  } catch (error) {
+    throw new HttpError(422, error.message || '口语评分服务验证失败。', 'speech_provider_test_failed');
+  }
+}));
+
+app.post('/api/speech/score', speechLimiter, asyncRoute(async (request, response) => {
+  const provider = String(request.body?.provider || '');
+  const credentials = speechProviderCredentials(provider, request.body?.credentials);
+  const referenceText = String(request.body?.referenceText || '').trim();
+  if (!referenceText || referenceText.length > 1000) throw new HttpError(400, '口语评分参考文本无效。', 'invalid_reference_text');
+  const { wave, pcm } = decodeSpeechWave(request.body?.audioBase64);
+  try {
+    const result = provider === 'xfyun'
+      ? await requestXfyunScore(credentials, referenceText, pcm)
+      : await requestSpeechSuperScore(credentials, referenceText, wave);
+    response.set('Cache-Control', 'no-store');
+    response.json(result);
+  } catch (error) {
+    throw new HttpError(422, error.message || '专业口语评分失败。', 'speech_scoring_failed');
+  }
 }));
 
 app.get('/api/catalog', rateLimit(60 * 1000, 60), asyncRoute(async (_request, response) => {

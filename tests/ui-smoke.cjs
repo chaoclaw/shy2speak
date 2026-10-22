@@ -61,6 +61,8 @@ let savedProfile = null;
 let textCapabilityCalls = 0;
 let textFeedbackCalls = 0;
 let feedbackRequestBody = null;
+const speechProviderTests = [];
+const speechScoreRequests = [];
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -89,6 +91,8 @@ async function main() {
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: '{"translation":"购物中心","html":"<section>Lesson</section>"}' } }] }) });
     }
     if (url === `${origin}/api/health`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, database: 'postgresql', auth: { email: true, phone: true, emailOtp: false, phoneOtp: false, passwordRecovery: false } }) });
+    if (url === `${origin}/api/speech/test`) { const body = route.request().postDataJSON(); speechProviderTests.push(body); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, provider: body.provider, connected: true }) }); }
+    if (url === `${origin}/api/speech/score`) { const body = route.request().postDataJSON(); speechScoreRequests.push(body); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ provider: body.provider, total: 94, pronunciation: 95, accuracy: 95, fluency: 91, completeness: 98, words: [{ word: 'Hello', score: 96 }] }) }); }
     if (url === `${origin}/api/auth/login`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ access_token: 'test-access', refresh_token: 'test-refresh', expires_in: 900, user: { id: '00000000-0000-4000-8000-000000000001', email: 'learner@example.com' } }) });
     if (url === `${origin}/api/learning-state` && route.request().method() === 'GET') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(cloudState) });
     if (url === `${origin}/api/learning-state`) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ syncedAt: '2099-10-11T00:00:00Z', snapshotCount: 1 }) });
@@ -159,7 +163,7 @@ async function main() {
   await page.locator('#languageToggle').hover();
   await page.waitForFunction(() => document.querySelector('#globalHoverToast')?.textContent === 'Switch interface language to Chinese');
   assert.equal(await page.locator('#languageToggle').getAttribute('aria-label'), 'Switch interface language to Chinese', 'top-right language guidance should follow the interface language');
-  const englishHeadings = { overview: 'Welcome back', vocabulary: 'My vocabulary', listening: 'Listening', ai: 'Unified AI configuration and scoring prompts', settings: 'Settings' };
+  const englishHeadings = { overview: 'Welcome back', vocabulary: 'My vocabulary', listening: 'Listening', ai: 'AI configuration and speaking assessment', settings: 'Settings' };
   for (const [view, heading] of Object.entries(englishHeadings)) {
     await page.evaluate((next) => window.navigate(next), view);
     await page.waitForFunction(({ id, text }) => document.querySelector(`#view-${id} .page-heading h1, #view-${id} .welcome-card h1`)?.textContent.includes(text), { id: view, text: heading });
@@ -366,7 +370,7 @@ async function main() {
   assert.ok(savedProfile?.avatar?.startsWith('data:image/webp;base64,'), 'custom avatar should be compressed and sent through the profile API');
 
   await page.evaluate(() => window.navigate('ai'));
-  assert.equal(await page.locator('.provider-card[data-provider]').count(), 1, 'AI services should use one unified configuration');
+  assert.equal(await page.locator('.provider-card[data-provider]').count(), 2, 'text AI and the selectable speech-scoring engine should have separate configurations');
   assert.ok((await page.locator('[data-provider="primary"] .provider-status').textContent()).includes('待配置'), 'AI must not claim a fake connection');
   await page.locator('[data-provider="primary"] .test-model').click();
   assert.ok((await page.locator('#modalTitle').textContent()).includes('统一 AI'), 'real unified provider configuration dialog should open');
@@ -390,13 +394,36 @@ async function main() {
   await page.waitForFunction(() => document.querySelector('#toastContainer')?.parentElement === document.body);
   assert.equal(textCapabilityCalls, 2, 'text capability validation should use the text provider for models and chat');
   assert.equal(await page.locator('#providerSpeechBaseUrl').count(), 0, 'the unified configuration must not require a speech provider');
-  assert.ok((await page.locator('.provider-status').textContent()).includes('文本能力已验证'), 'the unified card should report the text model as verified');
+  assert.ok((await page.locator('[data-provider="primary"] .provider-status').textContent()).includes('文本能力已验证'), 'the unified card should report the text model as verified');
   assert.equal(await page.locator('[data-model-role="browser"]').textContent(), 'Web Speech API', 'speech recognition should be delegated to the browser');
   assert.equal(await page.locator('[data-model-role="text"]').first().textContent(), 'deepseek-chat', 'text capabilities should display the text model');
   const storedProvider = await page.evaluate(() => JSON.parse(localStorage.getItem('shy-ai-providers-v1')).primary);
   assert.equal(storedProvider.textBaseUrl, 'https://text-ai.test/v1/');
   assert.equal('speechBaseUrl' in storedProvider, false, 'no speech endpoint should be persisted');
   assert.equal(Object.keys(storedProvider).some((key) => /apiKey|key/i.test(key)), false, 'API keys must never be persisted with the unified configuration');
+  assert.ok((await page.locator('[data-provider="speech"] .provider-status').textContent()).includes('本地默认'), 'the existing local scoring method should remain the default');
+  await page.locator('[data-provider="speech"] .test-model').click();
+  await page.selectOption('#speechProviderType', 'xfyun');
+  await page.fill('#xfyunAppId', 'xfyun-app'); await page.fill('#xfyunApiKey', 'xfyun-key'); await page.fill('#xfyunApiSecret', 'xfyun-secret');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
+  assert.equal(speechProviderTests.at(-1).provider, 'xfyun', 'iFLYTEK credentials should be validated through the NAS proxy');
+  assert.ok((await page.locator('[data-provider="speech"] .provider-status').textContent()).includes('已验证'), 'verified iFLYTEK scoring should become active');
+  let storedSpeech = await page.evaluate(() => JSON.parse(localStorage.getItem('shy-ai-providers-v1')).speech);
+  assert.equal(storedSpeech.type, 'xfyun');
+  assert.equal(Object.keys(storedSpeech).some((key) => /apiKey|secret|appId/i.test(key)), false, 'iFLYTEK credentials must not be persisted');
+  await page.locator('[data-provider="speech"] .test-model').click();
+  await page.selectOption('#speechProviderType', 'speechsuper');
+  await page.fill('#speechSuperAppKey', 'speechsuper-app'); await page.fill('#speechSuperSecretKey', 'speechsuper-secret'); await page.fill('#speechSuperUserId', 'test-user');
+  await page.locator('#modalActions .primary-btn').click();
+  await page.waitForFunction(() => !document.querySelector('#appModal').open);
+  assert.equal(speechProviderTests.at(-1).provider, 'speechsuper', 'SpeechSuper credentials should be validated through the NAS proxy');
+  storedSpeech = await page.evaluate(() => JSON.parse(localStorage.getItem('shy-ai-providers-v1')).speech);
+  assert.deepEqual({ type: storedSpeech.type, userId: storedSpeech.userId }, { type: 'speechsuper', userId: 'test-user' }, 'SpeechSuper non-secret preferences should be saved');
+  assert.equal(Object.keys(storedSpeech).some((key) => /appKey|secret/i.test(key)), false, 'SpeechSuper credentials must not be persisted');
+  const professionalScore = await page.evaluate(() => shyBackend.scoreSpeech({ provider: 'speechsuper', credentials: { appKey: 'speechsuper-app', secretKey: 'speechsuper-secret', userId: 'test-user' }, referenceText: 'Hello.', audioBase64: 'UklGRg==' }));
+  assert.equal(professionalScore.total, 94, 'professional speech results should travel through the backend adapter');
+  assert.equal(speechScoreRequests.at(-1).provider, 'speechsuper');
   const practiceResult = await page.evaluate(() => buildPracticeScore('Repeat this sentence clearly.', 'Repeat this sentence clearly.', 2, { silenceRatio: 0.1, volumeStability: 90 }, 0.95));
   assert.equal(practiceResult.accuracy, 100, 'exact browser transcript should receive full content accuracy');
   assert.equal(practiceResult.completeness, 100, 'exact browser transcript should receive full completeness');

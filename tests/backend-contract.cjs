@@ -15,7 +15,7 @@ const workflow = fs.readFileSync(path.join(root, '.github/workflows/docker.yml')
 for (const route of ['/api/auth/register', '/api/auth/login', '/api/auth/refresh', '/api/auth/otp', '/api/auth/verify-otp', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/logout']) {
   assert.ok(server.includes(route), `missing self-hosted auth route: ${route}`);
 }
-for (const api of ['saveProfile', 'checkNickname', 'pushLearningState', 'pullLearningState', 'resetPasswordWithCode', 'getVocabulary', 'deleteVocabularyEverywhere']) {
+for (const api of ['saveProfile', 'checkNickname', 'pushLearningState', 'pullLearningState', 'resetPasswordWithCode', 'getVocabulary', 'deleteVocabularyEverywhere', 'testSpeechProvider', 'scoreSpeech']) {
   assert.match(browserAdapter, new RegExp(`\\b${api}\\b`), `missing browser backend capability: ${api}`);
 }
 for (const table of ['user_content_seeds', 'user_vocabulary_items', 'user_vocabulary_memberships']) {
@@ -33,6 +33,12 @@ assert.match(server, /fetchYouTubeTopic/, 'NAS API must sync public YouTube capt
 assert.match(server, /fetchYouTubePlaylist/, 'NAS API must discover all public playlist topics server-side');
 assert.match(server, /\/api\/catalog\/topics\/:videoId/, 'NAS API must hydrate one topic on demand');
 assert.match(server, /\/api\/youtube\/audio\/:videoId/, 'NAS API must expose low-data course audio streaming');
+assert.match(server, /\/api\/speech\/test/, 'NAS API must expose professional speech-provider verification');
+assert.match(server, /\/api\/speech\/score/, 'NAS API must proxy professional pronunciation assessment');
+assert.match(server, /ise-api\.xfyun\.cn/, 'professional speech scoring must support iFLYTEK ISE');
+assert.match(server, /api\.speechsuper\.com/, 'professional speech scoring must support SpeechSuper');
+assert.match(server, /createHmac\('sha256'/, 'iFLYTEK credentials must use signed WebSocket authentication');
+assert.match(server, /createHash\('md5'/, 'SpeechSuper requests must use its signed request protocol');
 assert.match(server, /worstaudio\[acodec!=none\]\[vcodec=none\]/, 'course audio must ask yt-dlp for a bandwidth-efficient audio-only format');
 assert.match(server, /audio_resolver_unavailable/, 'course audio resolver failures must produce an actionable API error');
 assert.match(server, /\/api\/vocabulary/, 'NAS API must expose account vocabulary');

@@ -8,8 +8,8 @@
     <title>Shy2Speak · 英语口语学习</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
-    <script src="./boot.js?v=46"></script>
-    <link rel="stylesheet" href="./styles.css?v=46" />
+    <script src="./boot.js?v=47"></script>
+    <link rel="stylesheet" href="./styles.css?v=47" />
   </head>
   <body>
     <div class="app-shell">
@@ -267,11 +267,11 @@
 
           <!-- AI -->
           <section class="view" id="view-ai" data-title-zh="AI 服务" data-title-en="AI services">
-            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>统一 AI 配置与评分提示词</h1><p>使用一个文本模型处理翻译、HTML/PPT 和口语练习建议；录音不发送给 AI。</p></div><button class="primary-btn" id="configureProvider">配置并测试</button></div>
-            <div class="ai-health-grid ai-health-single"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">一个文本模型 · 浏览器语音识别</p></div><button class="secondary-btn test-model">配置并测试</button></article></div>
+            <div class="page-heading"><div><span class="eyebrow">AI SERVICE</span><h1>AI 配置与口语评分</h1><p>文本模型继续负责翻译、HTML/PPT 与建议；口语评分可使用本地方案、讯飞 ISE 或 SpeechSuper。</p></div><button class="primary-btn" id="configureProvider">配置文本 AI</button></div>
+            <div class="ai-health-grid"><article class="card provider-card" data-provider="primary"><div class="provider-logo openai">AI</div><div><span class="status warning provider-status">● 待配置</span><h3 id="primaryProviderName">统一 AI 服务</h3><p id="primaryProviderMeta">一个文本模型 · 生成练习建议</p></div><button class="secondary-btn test-model" data-configure="text">配置并测试</button></article><article class="card provider-card" data-provider="speech"><div class="provider-logo speech">MIC</div><div><span class="status success provider-status">● 本地默认</span><h3 id="speechProviderName">浏览器本地练习评分</h3><p id="speechProviderMeta">录音不上传 · 随时可用</p></div><button class="secondary-btn test-model" data-configure="speech">切换评分引擎</button></article></div>
 
             <div class="ai-layout">
-              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>统一配置能力</h3></div><button class="text-btn" id="retestProvider">重新测试</button></div><div class="capability-table single-config"><div class="cap-head"><span>必需能力</span><span>当前模型</span><span>验证状态</span></div><div><strong>口语文字识别</strong><span class="active-model-name" data-model-role="browser">Web Speech API</span><span class="capability-status" data-capability="browserSpeech">浏览器检测</span></div><div><strong>内容翻译与练习建议</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
+              <article class="card capability-card"><div class="card-heading"><div><span class="eyebrow">CAPABILITIES</span><h3>当前能力</h3></div><button class="text-btn" id="retestProvider">重新测试文本 AI</button></div><div class="capability-table single-config"><div class="cap-head"><span>能力</span><span>当前引擎</span><span>验证状态</span></div><div><strong>口语文字识别</strong><span class="active-model-name" data-model-role="browser">Web Speech API</span><span class="capability-status" data-capability="browserSpeech">浏览器检测</span></div><div><strong>口语发音评分</strong><span class="active-model-name" data-model-role="speech">本地练习评分</span><span class="capability-status yes" data-capability="speechScoring">✓ 本地可用</span></div><div><strong>内容翻译与练习建议</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="translation">待验证</span></div><div><strong>HTML PPT 生成</strong><span class="active-model-name" data-model-role="text">尚未配置</span><span class="capability-status" data-capability="htmlPpt">待验证</span></div></div></article>
 
               <article class="card prompt-card"><div class="card-heading"><div><span class="eyebrow">PROMPT LIBRARY</span><h3>评分提示词</h3></div><button class="secondary-btn compact" id="newPrompt">＋ 新建</button></div><div class="prompt-tabs" id="promptTabs"></div><label class="editor-label">System Prompt<textarea id="promptEditor"></textarea></label><div class="variable-row"><span>{{reference_text}}</span><span>{{recognized_text}}</span><span>{{practice_metrics}}</span><span>{{feedback_language}}</span></div><div class="prompt-footer"><div><span class="status success">✓ JSON Schema 验证通过</span><small id="promptVersion">本机模板 · 未修改</small></div><div class="button-row"><button class="text-btn" id="deletePrompt">删除</button><button class="text-btn" id="restorePrompt">恢复默认</button><button class="secondary-btn" id="testPrompt">对比测试</button><button class="primary-btn" id="savePrompt">保存并启用</button></div></div></article>
             </div>
@@ -314,9 +314,9 @@
       </form>
     </dialog>
 
-    <script src="./runtime-config.js?v=46"></script>
-    <script src="./i18n.js?v=46"></script>
-    <script src="./backend.js?v=46"></script>
-    <script src="./app.js?v=46"></script>
+    <script src="./runtime-config.js?v=47"></script>
+    <script src="./i18n.js?v=47"></script>
+    <script src="./backend.js?v=47"></script>
+    <script src="./app.js?v=47"></script>
   </body>
 </html>
